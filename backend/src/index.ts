@@ -1,3 +1,14 @@
+import "./db";
+import {
+  createConsent,
+  getConsentById,
+  revokeConsent,
+} from "./repositories/consentRepo";
+import {
+  recordAudit,
+  getAllAuditLogs,
+} from "./repositories/auditRepo";
+
 import express from "express";
 
 const app = express();
@@ -61,37 +72,41 @@ app.get("/health", (req, res) => {
   res.json({ status: "UP" });
 });
 
-app.post("/consents", (req, res) => {
+app.post("/consents", async (req, res) => {
   const { userId, purpose, dataTypes, validUntil } = req.body;
 
   if (!userId || !purpose || !dataTypes || !validUntil) {
     return res.status(400).json({ error: "Missing required fields" });
   }
 
-  const consentId = `consent_${consents.length + 1}`;
-
-  const consent: Consent = {
-    consentId,
+  const consent = {
+    consentId: `consent_${Date.now()}`,
     userId,
     purpose,
     dataTypes,
     validUntil,
-    status: "ACTIVE",
+    status: "ACTIVE" as const,
   };
 
-  consents.push(consent);
-  recordAuditEvent("CONSENT_CREATED", consent);
+  await createConsent(consent);
+
+  await recordAudit({
+    auditId: `audit_${Date.now()}`,
+    eventType: "CONSENT_CREATED",
+    consentId: consent.consentId,
+    userId,
+    timestamp: new Date().toISOString(),
+    details: consent,
+  });
 
   res.status(201).json({
-    consentId,
+    consentId: consent.consentId,
     status: consent.status,
   });
 });
 
-app.get("/consents/:id", (req, res) => {
-  const { id } = req.params;
-
-  const consent = consents.find(c => c.consentId === id);
+app.get("/consents/:id", async (req, res) => {
+  const consent = await getConsentById(req.params.id);
 
   if (!consent) {
     return res.status(404).json({ error: "Consent not found" });
@@ -100,10 +115,8 @@ app.get("/consents/:id", (req, res) => {
   res.json(consent);
 });
 
-app.post("/consents/:id/revoke", (req, res) => {
-  const { id } = req.params;
-
-  const consent = consents.find(c => c.consentId === id);
+app.post("/consents/:id/revoke", async (req, res) => {
+  const consent = await getConsentById(req.params.id);
 
   if (!consent) {
     return res.status(404).json({ error: "Consent not found" });
@@ -113,17 +126,26 @@ app.post("/consents/:id/revoke", (req, res) => {
     return res.status(400).json({ error: "Consent already revoked" });
   }
 
-  consent.status = "REVOKED";
-  recordAuditEvent("CONSENT_REVOKED", consent);
+  await revokeConsent(consent.consentId);
+
+  await recordAudit({
+    auditId: `audit_${Date.now()}`,
+    eventType: "CONSENT_REVOKED",
+    consentId: consent.consentId,
+    userId: consent.userId,
+    timestamp: new Date().toISOString(),
+    details: { status: "REVOKED" },
+  });
 
   res.json({
     consentId: consent.consentId,
-    status: consent.status,
+    status: "REVOKED",
   });
 });
 
-app.get("/audit", (req, res) => {
-  res.json(auditLogs);
+app.get("/audit", async (req, res) => {
+  const logs = await getAllAuditLogs();
+  res.json(logs);
 });
 
 app.listen(PORT, () => {
