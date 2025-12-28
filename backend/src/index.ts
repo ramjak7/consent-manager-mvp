@@ -16,6 +16,47 @@ type Consent = {
 
 const consents: Consent[] = [];
 
+type AuditEventType =
+  | "CONSENT_CREATED"
+  | "CONSENT_REVOKED";
+
+type AuditLog = {
+  auditId: string;
+  eventType: AuditEventType;
+  consentId: string;
+  userId: string;
+  timestamp: string;
+  details: {
+    purpose: string;
+    dataTypes: string[];
+    validUntil: string;
+    status: string;
+  };
+};
+
+const auditLogs: AuditLog[] = [];
+
+function recordAuditEvent(
+  eventType: AuditEventType,
+  consent: Consent
+) {
+  const audit: AuditLog = {
+    auditId: `audit_${auditLogs.length + 1}`,
+    eventType,
+    consentId: consent.consentId,
+    userId: consent.userId,
+    timestamp: new Date().toISOString(),
+    details: {
+      purpose: consent.purpose,
+      dataTypes: consent.dataTypes,
+      validUntil: consent.validUntil,
+      status: consent.status,
+    },
+  };
+
+  auditLogs.push(audit);
+}
+
 app.get("/health", (req, res) => {
   res.json({ status: "UP" });
 });
@@ -39,6 +80,7 @@ app.post("/consents", (req, res) => {
   };
 
   consents.push(consent);
+  recordAuditEvent("CONSENT_CREATED", consent);
 
   res.status(201).json({
     consentId,
@@ -72,11 +114,16 @@ app.post("/consents/:id/revoke", (req, res) => {
   }
 
   consent.status = "REVOKED";
+  recordAuditEvent("CONSENT_REVOKED", consent);
 
   res.json({
     consentId: consent.consentId,
     status: consent.status,
   });
+});
+
+app.get("/audit", (req, res) => {
+  res.json(auditLogs);
 });
 
 app.listen(PORT, () => {
