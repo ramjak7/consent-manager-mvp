@@ -8,6 +8,7 @@ import {
 import {
   recordAudit,
   getAllAuditLogs,
+  AuditEventType,
 } from "./repositories/auditRepo";
 
 import express from "express";
@@ -16,59 +17,6 @@ const app = express();
 const PORT = 3000;
 
 app.use(express.json());
-
-type Consent = {
-  consentId: string;
-  userId: string;
-  purpose: string;
-  dataTypes: string[];
-  validUntil: string;
-  status: "ACTIVE" | "REVOKED";
-};
-
-const consents: Consent[] = [];
-
-type AuditEventType =
-  | "CONSENT_CREATED"
-  | "CONSENT_REVOKED"
-  | "CONSENT_EXPIRED";  
-
-type AuditLog = {
-  auditId: string;
-  eventType: AuditEventType;
-  consentId: string;
-  userId: string;
-  timestamp: string;
-  details: {
-    purpose: string;
-    dataTypes: string[];
-    validUntil: string;
-    status: string;
-  };
-};
-
-const auditLogs: AuditLog[] = [];
-
-function recordAuditEvent(
-  eventType: AuditEventType,
-  consent: Consent
-) {
-  const audit: AuditLog = {
-    auditId: `audit_${auditLogs.length + 1}`,
-    eventType,
-    consentId: consent.consentId,
-    userId: consent.userId,
-    timestamp: new Date().toISOString(),
-    details: {
-      purpose: consent.purpose,
-      dataTypes: consent.dataTypes,
-      validUntil: consent.validUntil,
-      status: consent.status,
-    },
-  };
-
-  auditLogs.push(audit);
-}
 
 app.get("/health", (req, res) => {
   res.json({ status: "UP" });
@@ -98,7 +46,12 @@ app.post("/consents", async (req, res) => {
     consentId: consent.consentId,
     userId,
     timestamp: new Date().toISOString(),
-    details: consent,
+    details: {
+      purpose: consent.purpose,
+      dataTypes: consent.dataTypes,
+      validUntil: consent.validUntil,
+      status: consent.status,
+    },
   });
 
   res.status(201).json({
