@@ -3,6 +3,7 @@ import {
   createConsent,
   getConsentById,
   revokeConsent,
+  expireConsentIfNeeded,
 } from "./repositories/consentRepo";
 import {
   recordAudit,
@@ -29,7 +30,8 @@ const consents: Consent[] = [];
 
 type AuditEventType =
   | "CONSENT_CREATED"
-  | "CONSENT_REVOKED";
+  | "CONSENT_REVOKED"
+  | "CONSENT_EXPIRED";  
 
 type AuditLog = {
   auditId: string;
@@ -106,7 +108,29 @@ app.post("/consents", async (req, res) => {
 });
 
 app.get("/consents/:id", async (req, res) => {
-  const consent = await getConsentById(req.params.id);
+  const consentId = req.params.id;
+
+  // 🔹 Attempt expiry first
+  const expiredConsent = await expireConsentIfNeeded(consentId);
+
+  if (expiredConsent) {
+    await recordAudit({
+      auditId: `audit_${Date.now()}`,
+      eventType: "CONSENT_EXPIRED",
+      consentId: expiredConsent.consentId,
+      userId: expiredConsent.userId,
+      timestamp: new Date().toISOString(),
+      details: {
+        validUntil: expiredConsent.validUntil,
+        status: expiredConsent.status,
+      },
+    });
+
+    return res.json(expiredConsent);
+  }
+
+  // 🔹 Otherwise fetch normally
+  const consent = await getConsentById(consentId);
 
   if (!consent) {
     return res.status(404).json({ error: "Consent not found" });

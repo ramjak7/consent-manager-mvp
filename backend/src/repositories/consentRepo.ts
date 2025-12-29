@@ -54,3 +54,29 @@ export async function revokeConsent(consentId: string) {
 
   return (result.rowCount ?? 0) > 0;
 }
+
+export async function expireConsentIfNeeded(consentId: string): Promise<Consent | null> {
+  const query = `
+    UPDATE consents
+    SET status = 'REVOKED'
+    WHERE consent_id = $1
+      AND status = 'ACTIVE'
+      AND valid_until < NOW()
+    RETURNING *
+  `;
+
+  const result = await pool.query(query, [consentId]);
+
+  if (!result.rows.length) return null;
+
+  const row = result.rows[0];
+
+  return {
+    consentId: row.consent_id,
+    userId: row.user_id,
+    purpose: row.purpose,
+    dataTypes: row.data_types,
+    validUntil: row.valid_until,
+    status: row.status,
+  };
+}
