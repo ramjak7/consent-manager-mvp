@@ -3,7 +3,9 @@ import { pool } from "../db";
 export type AuditEventType =
   | "CONSENT_CREATED"
   | "CONSENT_REVOKED"
-  | "CONSENT_EXPIRED";
+  | "CONSENT_EXPIRED"
+  | "PROCESSING_ALLOWED"
+  | "PROCESSING_DENIED";
 
 export type AuditLog = {
   auditId: string;

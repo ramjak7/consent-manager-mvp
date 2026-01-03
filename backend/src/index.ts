@@ -10,6 +10,7 @@ import {
   getAllAuditLogs,
   AuditEventType,
 } from "./repositories/auditRepo";
+import { evaluateConsentPolicy } from "./policy/policyEngine";
 
 import express from "express";
 
@@ -127,4 +128,96 @@ app.get("/audit", async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`Consent Manager backend running on port ${PORT}`);
+});
+
+
+app.post("/process", async (req, res) => {
+  const { consentId, purpose, dataTypes } = req.body;
+
+  if (!consentId || !purpose || !dataTypes) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  if (!Array.isArray(dataTypes) || dataTypes.length === 0) {
+    return res.status(400).json({ error: "Invalid dataTypes" });
+  }
+
+  // DPDP §6 GUARANTEE:
+  // Processing is denied immediately if consent is revoked or expired.
+  // No downstream system is invoked before this check.
+
+  // 0. Enforce expiry
+  const expiredConsent = await expireConsentIfNeeded(consentId);
+
+  if (expiredConsent) {
+    await recordAudit({
+      auditId: `audit_${Date.now()}`,
+      eventType: "CONSENT_EXPIRED",
+      consentId: expiredConsent.consentId,
+      userId: expiredConsent.userId,
+      timestamp: new Date().toISOString(),
+      details: {
+        validUntil: expiredConsent.validUntil,
+        status: expiredConsent.status,
+      },
+    });
+
+    return res.status(403).json({ error: "Consent expired" });
+  }
+
+  // 1. Fetch latest consent
+  const consent = await getConsentById(consentId);
+
+  if (!consent) {
+    return res.status(404).json({ error: "Consent not found" });
+  }
+
+  // 2. Hard stop on revoked
+  if (consent.status !== "ACTIVE") {
+    await recordAudit({
+      auditId: `audit_${Date.now()}`,
+      eventType: "PROCESSING_DENIED",
+      consentId,
+      userId: consent.userId,
+      timestamp: new Date().toISOString(),
+      details: { reason: "Consent not active" },
+    });
+
+    return res.status(403).json({ error: "Consent not active" });
+  }
+
+  // 3. Policy evaluation
+  const decision = evaluateConsentPolicy(consent, {
+    purpose,
+    dataTypes,
+  });
+
+  // 4. Enforce decision
+  if (!decision.allow) {
+    await recordAudit({
+      auditId: `audit_${Date.now()}`,
+      eventType: "PROCESSING_DENIED",
+      consentId,
+      userId: consent.userId,
+      timestamp: new Date().toISOString(),
+      details: { reason: decision.reason },
+    });
+
+    return res.status(403).json({ error: decision.reason });
+  }
+
+  // OPTIONAL Phase 3.5 – basic replay guard
+  // Future: replace with processing_sessions table
+
+  // 5. Allowed
+  await recordAudit({
+    auditId: `audit_${Date.now()}`,
+    eventType: "PROCESSING_ALLOWED",
+    consentId,
+    userId: consent.userId,
+    timestamp: new Date().toISOString(),
+    details: { purpose, dataTypes },
+  });
+
+  res.json({ status: "PROCESSING_ALLOWED" });
 });
