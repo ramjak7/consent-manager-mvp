@@ -6,32 +6,33 @@ export type PolicyDecision =
 
 export function evaluateConsentPolicy(
   consent: Consent,
-  context: {
+  request: {
     purpose: string;
     dataTypes: string[];
     version: number;
   }
 ): PolicyDecision {
-  // 1. Consent must be ACTIVE
+
+  // 1️⃣ Consent must be ACTIVE (defense-in-depth)
   if (consent.status !== "ACTIVE") {
     return { allow: false, reason: "Consent not active" };
   }
 
-  // 2. Purpose must match
-  if (consent.purpose !== context.purpose) {
+  // 2️⃣ Purpose must match exactly
+  if (request.purpose !== consent.purpose) {
     return { allow: false, reason: "Purpose mismatch" };
   }
 
-  // 3. Requested data must be subset of allowed data
-  const unauthorized = context.dataTypes.filter(
-    dt => !consent.dataTypes.includes(dt)
-  );
+  // 3️⃣ Requested ⊆ Consented (Partial Scope Enforcement)
+  const consentedSet = new Set(consent.dataTypes);
 
-  if (unauthorized.length > 0) {
-    return {
-      allow: false,
-      reason: `Unauthorized data types: ${unauthorized.join(", ")}`
-    };
+  for (const dt of request.dataTypes) {
+    if (!consentedSet.has(dt)) {
+      return {
+        allow: false,
+        reason: `DataType '${dt}' not consented`
+      };
+    }
   }
 
   return { allow: true };

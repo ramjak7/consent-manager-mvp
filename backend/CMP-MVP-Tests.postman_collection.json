@@ -72,7 +72,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"userId\": \"{{userId}}\",\n  \"purpose\": \"{{purpose}}\",\n  \"dataTypes\": \"{{dataTypes}}\",\n  \"validUntil\": \"2026-12-31\"\n}",
+							"raw": "{\n  \"userId\": \"{{userId}}\",\n  \"purpose\": \"{{purpose}}\",\n  \"dataTypes\": [\"name\", \"aadhaar\"],\n  //\"dataTypes\": \"{{dataTypes}}\",\n  \"validUntil\": \"2026-12-31\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -118,7 +118,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"userId\": \"{{userId}}\",\n  \"purpose\": \"{{purpose}}\",\n  \"dataTypes\": \"{{dataTypes}}\",\n  \"validUntil\": \"2026-12-31\"\n}",
+							"raw": "{\n  \"userId\": \"{{userId}}\",\n  \"purpose\": \"{{purpose}}\",\n  \"dataTypes\": [\"name\", \"aadhaar\"],\n  //\"dataTypes\": \"{{dataTypes}}\",\n  \"validUntil\": \"2026-12-31\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -171,13 +171,13 @@
 					"response": []
 				},
 				{
-					"name": "Process Allowed",
+					"name": "Process Allowed (Proper Subset)",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test(\"Processing allowed\", () => {\r",
+									"pm.test(\"Subset Processing allowed\", () => {\r",
 									"  pm.response.to.have.status(200);\r",
 									"});"
 								],
@@ -193,6 +193,88 @@
 						"body": {
 							"mode": "raw",
 							"raw": "{\r\n  \"userId\": \"{{userId}}\",\r\n  \"purpose\": \"{{purpose}}\",\r\n  \"dataTypes\": [\"name\"]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/process",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"process"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Process Denied (Superset Attempt)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Superset denied\", () => {\r",
+									"  pm.response.to.have.status(403);\r",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"userId\": \"{{userId}}\",\r\n  \"purpose\": \"{{purpose}}\",\r\n  \"dataTypes\": [\"name\", \"phone\"]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/process",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"process"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Process Denied (Disjoint DataType)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Unconsented data denied\", () => {\r",
+									"  pm.response.to.have.status(403);\r",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"userId\": \"{{userId}}\",\r\n  \"purpose\": \"{{purpose}}\",\r\n  \"dataTypes\": [\"NA\"]\r\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -239,6 +321,51 @@
 							"path": [
 								"consents",
 								"{{latestConsentId}}",
+								"revoke"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Revoke Consent (Semantic)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Consent revoked semantically\", () => {\r",
+									"  pm.response.to.have.status(200);\r",
+									"\r",
+									"  const json = pm.response.json();\r",
+									"  pm.expect(json.status).to.be.oneOf([\"REVOKED\", \"NO_ACTIVE_CONSENT\"]);\r",
+									"});"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"userId\": \"{{userId}}\",\r\n  \"purpose\": \"{{purpose}}\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents/revoke",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
 								"revoke"
 							]
 						}

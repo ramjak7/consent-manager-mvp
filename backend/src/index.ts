@@ -29,6 +29,9 @@ app.post("/consents", async (req, res) => {
   if (!userId || !purpose || !dataTypes || !validUntil) {
     return res.status(400).json({ error: "Missing required fields" });
   }
+  if (!Array.isArray(dataTypes) || !dataTypes.every(dt => typeof dt === "string")) {
+    return res.status(400).json({ error: "Invalid dataTypes format" });
+  }
 
   const consent = {
     consentId: `consent_${Date.now()}`,
@@ -257,8 +260,10 @@ app.post("/process", async (req, res) => {
       userId: consent.userId,
       timestamp: new Date().toISOString(),
       details: { 
-        reason: decision.reason, 
-        version: consent.version, 
+        reason: decision.reason,
+        requestedDataTypes: dataTypes,
+        consentedDataTypes: consent.dataTypes,
+        version: consent.version,
       },
     });
 
@@ -275,8 +280,9 @@ app.post("/process", async (req, res) => {
     userId: consent.userId,
     timestamp: new Date().toISOString(),
     details: { 
-      purpose, 
-      dataTypes, 
+      purpose,
+      requestedDataTypes: dataTypes,
+      consentedDataTypes: consent.dataTypes,
       version: consent.version, 
     },
   });
