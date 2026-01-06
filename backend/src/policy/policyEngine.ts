@@ -9,6 +9,7 @@ export function evaluateConsentPolicy(
   context: {
     purpose: string;
     dataTypes: string[];
+    version: number;
   }
 ): PolicyDecision {
   // 1. Consent must be ACTIVE

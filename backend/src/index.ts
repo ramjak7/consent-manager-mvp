@@ -2,13 +2,13 @@ import "./db";
 import {
   createConsent,
   getConsentById,
+  getLatestActiveConsent,
   revokeConsent,
   expireConsentIfNeeded,
 } from "./repositories/consentRepo";
 import {
   recordAudit,
   getAllAuditLogs,
-  AuditEventType,
 } from "./repositories/auditRepo";
 import { evaluateConsentPolicy } from "./policy/policyEngine";
 
@@ -75,6 +75,7 @@ app.get("/consents/:id", async (req, res) => {
       userId: expiredConsent.userId,
       timestamp: new Date().toISOString(),
       details: {
+        version: expiredConsent.version,
         validUntil: expiredConsent.validUntil,
         status: expiredConsent.status,
       },
@@ -121,6 +122,54 @@ app.post("/consents/:id/revoke", async (req, res) => {
   });
 });
 
+/**
+ * Semantic revocation
+ * User-facing, DPDP-compliant revocation
+ * Revokes the latest ACTIVE consent for (userId, purpose)
+ */
+app.post("/consents/revoke", async (req, res) => {
+  const { userId, purpose } = req.body;
+
+  if (typeof userId !== "string" || typeof purpose !== "string") {
+    return res.status(400).json({
+      error: "userId and purpose are required"
+    });
+  }
+
+  // 1️⃣ Resolve authoritative consent
+  const consent = await getLatestActiveConsent(userId, purpose);
+
+  // 2️⃣ Idempotent behavior (enterprise-grade)
+  if (!consent) {
+    return res.json({
+      status: "NO_ACTIVE_CONSENT",
+      purpose
+    });
+  }
+
+  // 3️⃣ Revoke resolved consent
+  await revokeConsent(consent.consentId);
+
+  // 4️⃣ Audit
+  await recordAudit({
+    auditId: `audit_${Date.now()}`,
+    eventType: "CONSENT_REVOKED",
+    consentId: consent.consentId,
+    userId,
+    timestamp: new Date().toISOString(),
+    details: {
+      purpose,
+      version: consent.version,
+      revokedVia: "SEMANTIC"
+    }
+  });
+
+  res.json({
+    status: "REVOKED",
+    purpose
+  });
+});
+
 app.get("/audit", async (req, res) => {
   const logs = await getAllAuditLogs();
   res.json(logs);
@@ -130,24 +179,51 @@ app.listen(PORT, () => {
   console.log(`Consent Manager backend running on port ${PORT}`);
 });
 
-
+// INVARIANT:
+// Enforcement always uses latest ACTIVE consent version per (userId, purpose)
+// Historical consent IDs are never evaluated for processing
 app.post("/process", async (req, res) => {
-  const { consentId, purpose, dataTypes } = req.body;
-
-  if (!consentId || !purpose || !dataTypes) {
-    return res.status(400).json({ error: "Missing required fields" });
+  if (!req.body || typeof req.body !== "object") {
+    return res.status(400).json({ error: "Request body must be a JSON object" });
   }
 
-  if (!Array.isArray(dataTypes) || dataTypes.length === 0) {
-    return res.status(400).json({ error: "Invalid dataTypes" });
+  const allowedKeys = ["userId", "purpose", "dataTypes"];
+  const requestKeys = Object.keys(req.body);
+
+  const hasOnlyAllowedKeys =
+    requestKeys.length === allowedKeys.length &&
+    allowedKeys.every(k => requestKeys.includes(k));
+
+  if (!hasOnlyAllowedKeys) {
+    return res.status(400).json({
+      error: "Invalid request shape. Only userId, purpose, dataTypes allowed."
+    });
   }
 
-  // DPDP §6 GUARANTEE:
-  // Processing is denied immediately if consent is revoked or expired.
-  // No downstream system is invoked before this check.
+  const { userId, purpose, dataTypes } = req.body;
 
-  // 0. Enforce expiry
-  const expiredConsent = await expireConsentIfNeeded(consentId);
+  /**
+   * 🔒 Strict value validation (DPDP-safe)
+   * Prevents type confusion, coercion attacks, malformed payloads
+   */
+  if (
+    typeof userId !== "string" ||
+    typeof purpose !== "string" ||
+    !Array.isArray(dataTypes) ||
+    dataTypes.length === 0 ||
+    !dataTypes.every(dt => typeof dt === "string")
+  ) {
+    return res.status(400).json({ error: "Invalid request values" });
+  }
+
+  // 1️⃣ Fetch latest ACTIVE consent (authoritative)
+  const consent = await getLatestActiveConsent(userId, purpose);
+  if (!consent) {
+    return res.status(403).json({ error: "No active consent" });
+  }
+
+  // 2️⃣ Enforce expiry on authoritative version
+  const expiredConsent = await expireConsentIfNeeded(consent.consentId);
 
   if (expiredConsent) {
     await recordAudit({
@@ -157,6 +233,7 @@ app.post("/process", async (req, res) => {
       userId: expiredConsent.userId,
       timestamp: new Date().toISOString(),
       details: {
+        version: expiredConsent.version,
         validUntil: expiredConsent.validUntil,
         status: expiredConsent.status,
       },
@@ -165,42 +242,24 @@ app.post("/process", async (req, res) => {
     return res.status(403).json({ error: "Consent expired" });
   }
 
-  // 1. Fetch latest consent
-  const consent = await getConsentById(consentId);
-
-  if (!consent) {
-    return res.status(404).json({ error: "Consent not found" });
-  }
-
-  // 2. Hard stop on revoked
-  if (consent.status !== "ACTIVE") {
-    await recordAudit({
-      auditId: `audit_${Date.now()}`,
-      eventType: "PROCESSING_DENIED",
-      consentId,
-      userId: consent.userId,
-      timestamp: new Date().toISOString(),
-      details: { reason: "Consent not active" },
-    });
-
-    return res.status(403).json({ error: "Consent not active" });
-  }
-
-  // 3. Policy evaluation
+  // 3️⃣ Policy enfrocement (version-aware)
   const decision = evaluateConsentPolicy(consent, {
     purpose,
     dataTypes,
+    version: consent.version,
   });
 
-  // 4. Enforce decision
   if (!decision.allow) {
     await recordAudit({
       auditId: `audit_${Date.now()}`,
       eventType: "PROCESSING_DENIED",
-      consentId,
+      consentId: consent.consentId,
       userId: consent.userId,
       timestamp: new Date().toISOString(),
-      details: { reason: decision.reason },
+      details: { 
+        reason: decision.reason, 
+        version: consent.version, 
+      },
     });
 
     return res.status(403).json({ error: decision.reason });
@@ -208,15 +267,18 @@ app.post("/process", async (req, res) => {
 
   // OPTIONAL Phase 3.5 – basic replay guard
   // Future: replace with processing_sessions table
-
-  // 5. Allowed
+  // 4️⃣ Allowed
   await recordAudit({
     auditId: `audit_${Date.now()}`,
     eventType: "PROCESSING_ALLOWED",
-    consentId,
+    consentId: consent.consentId,
     userId: consent.userId,
     timestamp: new Date().toISOString(),
-    details: { purpose, dataTypes },
+    details: { 
+      purpose, 
+      dataTypes, 
+      version: consent.version, 
+    },
   });
 
   res.json({ status: "PROCESSING_ALLOWED" });

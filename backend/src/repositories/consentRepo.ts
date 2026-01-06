@@ -27,10 +27,11 @@ export async function createConsent(input: {
   try {
     await client.query("BEGIN");
 
-    // 1️⃣ Determine consent_group_id (stable per user + purpose)
+    // Determine consent_group_id (stable per user + purpose)
     const consentGroupId = `${input.userId}:${input.purpose}`;
 
     // 1️⃣ Revoke existing ACTIVE consent (if any)
+    // Enforce invariant: only one ACTIVE consent per (userId, purpose)
     await client.query(
       `
       UPDATE consents
@@ -81,24 +82,56 @@ export async function createConsent(input: {
   }
 }
 
-/** 
- * Fetches the latest ACTIVE consent by consentId.
- * Used for /process and revoke.
+/**
+ * Fetches a specific consent version by consentId.
+ * READ-ONLY. May return REVOKED or historical versions.
  */
 export async function getConsentById(
   consentId: string
 ): Promise<Consent | null> {
   const result = await pool.query(
-    `
-    SELECT *
-    FROM consents
-    WHERE consent_id = $1
-    LIMIT 1
-    `,
+    `SELECT * FROM consents WHERE consent_id = $1`,
     [consentId]
   );
 
-  if (result.rows?.length === 0) return null;
+  if (!result.rows.length) return null;
+
+  const row = result.rows[0];
+
+  return {
+    consentId: row.consent_id,
+    consentGroupId: row.consent_group_id,
+    version: row.version,
+    userId: row.user_id,
+    purpose: row.purpose,
+    dataTypes: row.data_types,
+    validUntil: row.valid_until,
+    status: row.status,
+  };
+}
+
+/** 
+ * Fetches the latest ACTIVE consent by userId, purpose
+ * Used for /process and revoke.
+ */
+export async function getLatestActiveConsent(
+  userId: string,
+  purpose: string
+): Promise<Consent | null> {
+  const result = await pool.query(
+    `
+    SELECT *
+    FROM consents
+    WHERE user_id = $1
+      AND purpose = $2
+      AND status = 'ACTIVE'
+    ORDER BY version DESC
+    LIMIT 1
+    `,
+    [userId, purpose]
+  );
+
+  if (!result.rows.length) return null;
 
   const row = result.rows[0];
 
@@ -132,7 +165,8 @@ export async function revokeConsent(consentId: string) {
 }
 
 /**
- * Enforces expiry atomically.
+ * Enforces expiry atomically for a specific consent version.
+ * Used to guarantee DPDP §6 immediate stop.
  */
 export async function expireConsentIfNeeded(
   consentId: string
