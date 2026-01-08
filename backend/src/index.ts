@@ -11,13 +11,17 @@ import {
   getAllAuditLogs,
 } from "./repositories/auditRepo";
 import { evaluateConsentPolicy } from "./policy/policyEngine";
+import { ProcessRequestSchema } from "./schemas/process.schema";
+import { validate } from "./middleware/validate";
 
 import express from "express";
+import consentRoutes from "./routes/consentRoutes";
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+app.use(consentRoutes);
 
 app.get("/health", (req, res) => {
   res.json({ status: "UP" });
@@ -33,34 +37,34 @@ app.post("/consents", async (req, res) => {
     return res.status(400).json({ error: "Invalid dataTypes format" });
   }
 
-  const consent = {
-    consentId: `consent_${Date.now()}`,
+  const consentId = `consent_${Date.now()}`;
+
+  await createConsent({
+    consentId,
     userId,
     purpose,
     dataTypes,
     validUntil,
-    status: "ACTIVE" as const,
-  };
-
-  await createConsent(consent);
+  });
 
   await recordAudit({
     auditId: `audit_${Date.now()}`,
-    eventType: "CONSENT_CREATED",
-    consentId: consent.consentId,
+    eventType: "CONSENT_REQUESTED",
+    consentId,
     userId,
     timestamp: new Date().toISOString(),
     details: {
-      purpose: consent.purpose,
-      dataTypes: consent.dataTypes,
-      validUntil: consent.validUntil,
-      status: consent.status,
+      purpose,
+      dataTypes,
+      validUntil,
+      approvalRequired: true
     },
   });
 
   res.status(201).json({
-    consentId: consent.consentId,
-    status: consent.status,
+    consentId,
+    status: "REQUESTED",
+    message: "Consent awaiting approval"
   });
 });
 
@@ -185,7 +189,8 @@ app.listen(PORT, () => {
 // INVARIANT:
 // Enforcement always uses latest ACTIVE consent version per (userId, purpose)
 // Historical consent IDs are never evaluated for processing
-app.post("/process", async (req, res) => {
+app.post("/process", validate(ProcessRequestSchema), async (req, res) => {
+  /*
   if (!req.body || typeof req.body !== "object") {
     return res.status(400).json({ error: "Request body must be a JSON object" });
   }
@@ -202,6 +207,7 @@ app.post("/process", async (req, res) => {
       error: "Invalid request shape. Only userId, purpose, dataTypes allowed."
     });
   }
+  */
 
   const { userId, purpose, dataTypes } = req.body;
 
@@ -209,6 +215,7 @@ app.post("/process", async (req, res) => {
    * 🔒 Strict value validation (DPDP-safe)
    * Prevents type confusion, coercion attacks, malformed payloads
    */
+  /*
   if (
     typeof userId !== "string" ||
     typeof purpose !== "string" ||
@@ -218,6 +225,7 @@ app.post("/process", async (req, res) => {
   ) {
     return res.status(400).json({ error: "Invalid request values" });
   }
+  */
 
   // 1️⃣ Fetch latest ACTIVE consent (authoritative)
   const consent = await getLatestActiveConsent(userId, purpose);
