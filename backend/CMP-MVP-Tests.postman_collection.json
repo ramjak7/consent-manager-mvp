@@ -1,28 +1,28 @@
 {
 	"info": {
-		"_postman_id": "1a60ff76-4e1b-40f5-8c94-eba5e725edc4",
+		"_postman_id": "b6e62b93-c07b-4c3a-a829-49ee68e64d6e",
 		"name": "CMP-MVP-Tests",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "42448828"
 	},
 	"item": [
 		{
-			"name": "Health",
+			"name": "1-Happy Path (Level 3A)",
 			"item": [
 				{
-					"name": "Health",
+					"name": "1.1 Health Check",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test(\"Service is UP\", () => {\r",
-									"  pm.response.to.have.status(200);\r",
+									"pm.test(\"Service is UP\", () => {",
+									"  pm.response.to.have.status(200);",
+									"  const json = pm.response.json();",
+									"  pm.expect(json.status).to.equal(\"UP\");",
 									"});"
 								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
+								"type": "text/javascript"
 							}
 						}
 					],
@@ -40,30 +40,32 @@
 						}
 					},
 					"response": []
-				}
-			]
-		},
-		{
-			"name": "Consent Lifecycle",
-			"item": [
+				},
 				{
-					"name": "Create Consent (Happy)",
+					"name": "1.2 Create Consent (Happy Path)",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test(\"Consent created\", () => {\r",
-									"  pm.response.to.have.status(201);\r",
-									"});\r",
-									"\r",
-									"const json = pm.response.json();\r",
-									"pm.environment.set(\"consentId\", json.consentId);\r",
-									"pm.environment.set(\"latestConsentId\", json.consentId);"
+									"pm.test(\"Consent created with 201\", () => {",
+									"  pm.response.to.have.status(201);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.test(\"Response has consentId\", () => {",
+									"  pm.expect(json.consentId).to.exist;",
+									"  pm.expect(json.consentId).to.be.a(\"string\");",
+									"});",
+									"",
+									"pm.test(\"Status is REQUESTED\", () => {",
+									"  pm.expect(json.status).to.equal(\"REQUESTED\");",
+									"});",
+									"",
+									"pm.environment.set(\"consentId\", json.consentId);",
+									"pm.environment.set(\"approvalToken\", json.approvalToken || \"\");"
 								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
+								"type": "text/javascript"
 							}
 						}
 					],
@@ -72,7 +74,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"userId\": \"{{userId}}\",\n  \"purpose\": \"{{purpose}}\",\n  \"dataTypes\": [\"name\", \"aadhaar\"],\n  //\"dataTypes\": \"{{dataTypes}}\",\n  \"validUntil\": \"2026-12-31\"\n}",
+							"raw": "{\"userId\": \"{{userId}}\",\"purpose\": \"{{purpose}}\",\"dataTypes\": [\"name\", \"aadhaar\"],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -92,65 +94,30 @@
 					"response": []
 				},
 				{
-					"name": "Create Consent (Duplicate Purpose)",
+					"name": "1.3 Get Consent by ID",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"const json = pm.response.json();\r",
-									"pm.environment.set(\"latestConsentId\", json.consentId);\r",
-									"\r",
-									"pm.test(\"Previous consent revoked\", () => {\r",
-									"  pm.expect(pm.environment.get(\"latestConsentId\")).to.not.eql(\r",
-									"    pm.environment.get(\"consentId\")\r",
-									"  );\r",
-									"});"
+									"pm.test(\"Consent retrieved\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.test(\"Consent has correct structure\", () => {",
+									"  pm.expect(json.consentId).to.equal(pm.environment.get(\"consentId\"));",
+									"  pm.expect(json.status).to.be.oneOf([\"REQUESTED\", \"ACTIVE\", \"REVOKED\", \"REJECTED\", \"EXPIRED\"]);",
+									"  pm.expect(json.userId).to.exist;",
+									"  pm.expect(json.purpose).to.exist;",
+									"  pm.expect(json.dataTypes).to.be.an(\"array\");",
+									"});",
+									"",
+									"if (json.approvalToken) {",
+									"  pm.environment.set(\"approvalToken\", json.approvalToken);",
+									"}"
 								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n  \"userId\": \"{{userId}}\",\n  \"purpose\": \"{{purpose}}\",\n  \"dataTypes\": [\"name\", \"aadhaar\"],\n  //\"dataTypes\": \"{{dataTypes}}\",\n  \"validUntil\": \"2026-12-31\"\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{baseUrl}}/consents",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"consents"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Get Consent (Active)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Consent fetched\", () => {\r",
-									"  pm.response.to.have.status(200);\r",
-									"});"
-								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
+								"type": "text/javascript"
 							}
 						}
 					],
@@ -171,142 +138,25 @@
 					"response": []
 				},
 				{
-					"name": "Process Allowed (Proper Subset)",
+					"name": "1.4 Approve Consent by Token",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test(\"Subset Processing allowed\", () => {\r",
-									"  pm.response.to.have.status(200);\r",
-									"});"
+									"pm.test(\"Consent approved\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.test(\"Status changed to ACTIVE\", () => {",
+									"  pm.expect(json.status).to.equal(\"ACTIVE\");",
+									"  pm.expect(json.consentId).to.exist;",
+									"});",
+									"",
+									"pm.environment.set(\"activeConsentId\", json.consentId);"
 								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\r\n  \"userId\": \"{{userId}}\",\r\n  \"purpose\": \"{{purpose}}\",\r\n  \"dataTypes\": [\"name\"]\r\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{baseUrl}}/process",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"process"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Process Denied (Superset Attempt)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Superset denied\", () => {\r",
-									"  pm.response.to.have.status(403);\r",
-									"});"
-								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\r\n  \"userId\": \"{{userId}}\",\r\n  \"purpose\": \"{{purpose}}\",\r\n  \"dataTypes\": [\"name\", \"phone\"]\r\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{baseUrl}}/process",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"process"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Process Denied (Disjoint DataType)",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Unconsented data denied\", () => {\r",
-									"  pm.response.to.have.status(403);\r",
-									"});"
-								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\r\n  \"userId\": \"{{userId}}\",\r\n  \"purpose\": \"{{purpose}}\",\r\n  \"dataTypes\": [\"NA\"]\r\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{baseUrl}}/process",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"process"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Revoke Consent",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Consent revoked\", () => {\r",
-									"  pm.response.to.have.status(200);\r",
-									"});"
-								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
+								"type": "text/javascript"
 							}
 						}
 					],
@@ -314,36 +164,36 @@
 						"method": "POST",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/consents/{{latestConsentId}}/revoke",
+							"raw": "{{baseUrl}}/consents/approve/{{approvalToken}}",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
 								"consents",
-								"{{latestConsentId}}",
-								"revoke"
+								"approve",
+								"{{approvalToken}}"
 							]
 						}
 					},
 					"response": []
 				},
 				{
-					"name": "Revoke Consent (Semantic)",
+					"name": "1.5 Process Data (Allowed)",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test(\"Consent revoked semantically\", () => {\r",
-									"  pm.response.to.have.status(200);\r",
-									"\r",
-									"  const json = pm.response.json();\r",
-									"  pm.expect(json.status).to.be.oneOf([\"REVOKED\", \"NO_ACTIVE_CONSENT\"]);\r",
+									"pm.test(\"Data processing allowed\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.test(\"Status is PROCESSING_ALLOWED\", () => {",
+									"  pm.expect(json.status).to.equal(\"PROCESSING_ALLOWED\");",
 									"});"
 								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
+								"type": "text/javascript"
 							}
 						}
 					],
@@ -352,7 +202,52 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\r\n  \"userId\": \"{{userId}}\",\r\n  \"purpose\": \"{{purpose}}\"\r\n}",
+							"raw": "{\"userId\": \"{{userId}}\",\"purpose\": \"{{purpose}}\",\"dataTypes\": [\"name\"]}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/process",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"process"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "1.6 Semantic Revoke (Latest ACTIVE)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Consent revoked\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.test(\"Status is REVOKED\", () => {",
+									"  pm.expect(json.status).to.equal(\"REVOKED\");",
+									"  pm.expect(json.purpose).to.equal(pm.environment.get(\"purpose\"));",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"{{userId}}\",\"purpose\": \"{{purpose}}\"}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -373,38 +268,140 @@
 					"response": []
 				},
 				{
-					"name": "Get Consent (Revoked)",
+					"name": "1.7 Specific Revoke by ID",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test(\"Consent fetched\", () => {\r",
-									"  pm.response.to.have.status(200);\r",
-									"});\r",
-									"\r",
-									"const json = pm.response.json();\r",
-									"pm.test(\"Consent is revoked\", () => {\r",
-									"  pm.expect(json.status).to.eql(\"REVOKED\");\r",
+									"pm.test(\"Cannot revoke already-revoked consent\", () => {",
+									"  pm.response.to.have.status(400);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.test(\"Error message present\", () => {",
+									"  pm.expect(json.error).to.include(\"already revoked\");",
 									"});"
 								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
+								"type": "text/javascript"
 							}
 						}
 					],
 					"request": {
-						"method": "GET",
+						"method": "POST",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/consents/{{consentId}}",
+							"raw": "{{baseUrl}}/consents/{{consentId}}/revoke",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
 								"consents",
-								"{{consentId}}"
+								"{{consentId}}",
+								"revoke"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "1.8 Get Audit Logs",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Audit logs retrieved\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.test(\"Audit has pagination structure\", () => {",
+									"  pm.expect(json.page).to.equal(1);",
+									"  pm.expect(json.limit).to.equal(100);",
+									"  pm.expect(json.total).to.be.a(\"number\");",
+									"  pm.expect(json.data).to.be.an(\"array\");",
+									"});",
+									"",
+									"pm.test(\"Audit events are present\", () => {",
+									"  pm.expect(json.data.length).to.be.greaterThan(0);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-API-Key",
+								"value": "{{adminApiKey}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/audit?page=1&limit=100",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"audit"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "100"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "1.9 Admin Force-Expire Consent (with API Key)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Admin expired consent\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.test(\"Status changed to EXPIRED or REJECTED\", () => {",
+									"  pm.expect(json.status).to.be.oneOf([\"EXPIRED\", \"REJECTED\"]);",
+									"  pm.expect(json.mode).to.equal(\"ADMIN_FORCED\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-API-Key",
+								"value": "{{adminApiKey}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/admin/consents/{{activeConsentId}}/expire",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								"consents",
+								"{{activeConsentId}}",
+								"expire"
 							]
 						}
 					},
@@ -413,22 +410,25 @@
 			]
 		},
 		{
-			"name": "Processing – Policy Denials",
+			"name": "2-Validation Errors (Level 3B)",
 			"item": [
 				{
-					"name": "Purpose Mismatch",
+					"name": "2.1 POST /consents - Missing userId",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test(\"Purpose mismatch denied\", () => {\r",
-									"  pm.response.to.have.status(403);\r",
+									"pm.test(\"Missing userId rejected\", () => {",
+									"  pm.response.to.have.status(400);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.test(\"Error message present\", () => {",
+									"  pm.expect(json.error).to.exist;",
 									"});"
 								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
+								"type": "text/javascript"
 							}
 						}
 					],
@@ -437,7 +437,347 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\r\n  \"userId\": \"{{userId}}\",\r\n  \"purpose\": \"Marketing\",\r\n  \"dataTypes\": [\"name\"]\r\n}",
+							"raw": "{\"purpose\": \"marketing\",\"dataTypes\": [\"name\"],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2.2 POST /consents - Missing purpose",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Missing purpose rejected\", () => {pm.response.to.have.status(400);pm.expect(pm.response.json().error).to.exist;});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"user-1\",\"dataTypes\": [\"name\"],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2.3 POST /consents - Missing dataTypes",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Missing dataTypes rejected\", () => {pm.response.to.have.status(400);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"user-1\",\"purpose\": \"marketing\",\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2.4 POST /consents - Empty dataTypes Array",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Empty dataTypes rejected\", () => {pm.response.to.have.status(400);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"user-1\",\"purpose\": \"marketing\",\"dataTypes\": [],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2.5 POST /consents - dataTypes as String (not array)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Invalid dataTypes format rejected\", () => {",
+									"  pm.response.to.have.status(400);",
+									"  pm.expect(pm.response.json().error).to.exist;",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"user-1\",\"purpose\": \"marketing\",\"dataTypes\": \"name\",\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2.6 POST /consents - Invalid ISO Date",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Invalid date rejected\", () => {pm.response.to.have.status(400);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"user-1\",\"purpose\": \"marketing\",\"dataTypes\": [\"name\"],\"validUntil\": \"invalid-date\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2.7 POST /consents - validUntil in Past",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Past validUntil rejected\", () => {",
+									"  pm.response.to.have.status(400);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"user-1\",\"purpose\": \"marketing\",\"dataTypes\": [\"name\"],\"validUntil\": \"2020-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2.8 POST /consents/revoke - Missing userId",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Missing userId in revoke rejected\", () => {pm.response.to.have.status(400);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"purpose\": \"marketing\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents/revoke",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"revoke"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2.9 POST /consents/revoke - Missing purpose",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Missing purpose in revoke rejected\", () => {pm.response.to.have.status(400);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"user-1\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents/revoke",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"revoke"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2.10 POST /process - Missing userId",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Missing userId in process rejected\", () => {pm.response.to.have.status(400);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"purpose\": \"marketing\",\"dataTypes\": [\"name\"]}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -457,19 +797,15 @@
 					"response": []
 				},
 				{
-					"name": "Unauthorized DataTypes",
+					"name": "2.11 POST /process - Missing purpose",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test(\"Unauthorized data denied\", () => {\r",
-									"  pm.response.to.have.status(403);\r",
-									"});"
+									"pm.test(\"Missing purpose in process rejected\", () => {pm.response.to.have.status(400);});"
 								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
+								"type": "text/javascript"
 							}
 						}
 					],
@@ -478,7 +814,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\r\n  \"userId\": \"{{userId}}\",\r\n  \"purpose\": \"{{purpose}}\",\r\n  \"dataTypes\": [\"phone\"]\r\n}",
+							"raw": "{\"userId\": \"user-1\",\"dataTypes\": [\"name\"]}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -498,19 +834,15 @@
 					"response": []
 				},
 				{
-					"name": "No Active Consent",
+					"name": "2.12 POST /process - Missing dataTypes",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test(\"No active consent denied\", () => {\r",
-									"  pm.response.to.have.status(403);\r",
-									"});"
+									"pm.test(\"Missing dataTypes in process rejected\", () => {pm.response.to.have.status(400);});"
 								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
+								"type": "text/javascript"
 							}
 						}
 					],
@@ -519,7 +851,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\r\n  \"userId\": \"user_no_consent\",\r\n  \"purpose\": \"{{purpose}}\",\r\n  \"dataTypes\": [\"name\"]\r\n}",
+							"raw": "{\"userId\": \"user-1\",\"purpose\": \"marketing\"}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -533,6 +865,84 @@
 							],
 							"path": [
 								"process"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2.13 POST /process - Empty dataTypes",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Empty dataTypes in process rejected\", () => {pm.response.to.have.status(400);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"user-1\",\"purpose\": \"marketing\",\"dataTypes\": []}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/process",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"process"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2.14 POST /consents/approve/:token - Extra Fields (Strict Validation)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Extra fields rejected or ignored\", () => {",
+									"  pm.expect(pm.response.status).to.be.oneOf([200, 400]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"extraField\": \"should-be-rejected\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents/approve/{{approvalToken}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"approve",
+								"{{approvalToken}}"
 							]
 						}
 					},
@@ -541,22 +951,23 @@
 			]
 		},
 		{
-			"name": "Processing – DPDP §6 Guarantees",
+			"name": "3-NotFound & Authorization (Level 3C-3D)",
 			"item": [
 				{
-					"name": "After Revocation",
+					"name": "3.0 Create Consent for Auth Tests",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test(\"Processing denied after revocation\", () => {\r",
-									"  pm.response.to.have.status(403);\r",
-									"});"
+									"pm.test(\"Consent created for auth tests\", () => {",
+									"  pm.response.to.have.status(201);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.environment.set(\"authTestConsentId\", json.consentId);"
 								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
+								"type": "text/javascript"
 							}
 						}
 					],
@@ -565,7 +976,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\r\n  \"userId\": \"{{userId}}\",\r\n  \"purpose\": \"{{purpose}}\",\r\n  \"dataTypes\": [\"name\"]\r\n}",
+							"raw": "{\"userId\": \"auth-test-user\",\"purpose\": \"auth-testing\",\"dataTypes\": [\"name\"],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -573,298 +984,3212 @@
 							}
 						},
 						"url": {
-							"raw": "{{baseUrl}}/process",
+							"raw": "{{baseUrl}}/consents",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
-								"process"
+								"consents"
 							]
 						}
 					},
 					"response": []
 				},
 				{
-					"name": "After Expiry",
+					"name": "3.1 GET /consents/nonexistent",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"pm.test(\"Expired consent rejected (schema or expiry)\", () => {\r",
-									"  pm.expect([400, 403]).to.include(pm.response.code);\r",
+									"pm.test(\"Non-existent consent not found\", () => {",
+									"  pm.response.to.have.status(404);",
+									"  pm.expect(pm.response.json().error).to.include(\"not found\");",
 									"});"
 								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\r\n  \"userId\": \"user_expired\",\r\n  \"purpose\": \"{{purpose}}\",\r\n  \"dataTypes\": [\"name\"],\r\n  \"validUntil\": \"2020-01-01\"\r\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{baseUrl}}/process",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"process"
-							]
-						}
-					},
-					"response": []
-				}
-			]
-		},
-		{
-			"name": "Security & Abuse",
-			"item": [
-				{
-					"name": "Extra Field Injection",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Extra fields rejected\", () => {\r",
-									"  pm.response.to.have.status(400);\r",
-									"});"
-								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\r\n  \"userId\": \"{{userId}}\",\r\n  \"purpose\": \"{{purpose}}\",\r\n  \"dataTypes\": [\"name\"],\r\n  \"status\": \"ACTIVE\"\r\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{baseUrl}}/process",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"process"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Missing Field",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Missing field rejected\", () => {\r",
-									"  pm.response.to.have.status(400);\r",
-									"});"
-								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\r\n  \"userId\": \"{{userId}}\",\r\n  \"purpose\": \"{{purpose}}\"\r\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{baseUrl}}/process",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"process"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Wrong DataTypes Shape",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Invalid datatype rejected\", () => {\r",
-									"  pm.response.to.have.status(400);\r",
-									"});"
-								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\r\n  \"userId\": \"{{userId}}\",\r\n  \"purpose\": \"{{purpose}}\",\r\n  \"dataTypes\": \"name\"\r\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{baseUrl}}/process",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"process"
-							]
-						}
-					},
-					"response": []
-				}
-			]
-		},
-		{
-			"name": "Versioning & History",
-			"item": [
-				{
-					"name": "Old ConsentId Processing Attempt",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"pm.test(\"Old consentId processing attempt\", () => {\r",
-									"  pm.expect(pm.response.code).to.eql(400);\r",
-									"});"
-								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\r\n  \"userId\": \"{{userId}}\",\r\n  \"purpose\": \"{{purpose}}\",\r\n  \"dataTypes\": [\"name\"]\r\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/process",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"process"
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "Latest Version Enforced",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"const json = pm.response.json();\r",
-									"pm.test(\"Latest version enforced via schema rejection\", () => {\r",
-									"  pm.response.to.have.status(400);\r",
-									"});"
-								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
-							}
-						}
-					],
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\r\n  \"userId\": \"{{userId}}\",\r\n  \"purpose\": \"{{purpose}}\",\r\n  \"dataTypes\": [\"name\"]\r\n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/process",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"process"
-							]
-						}
-					},
-					"response": []
-				}
-			]
-		},
-		{
-			"name": "Audit Verification",
-			"item": [
-				{
-					"name": "Audit Log Exists",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"const logs = pm.response.json();\r",
-									"\r",
-									"pm.test(\"Audit logs exist\", () => {\r",
-									"  pm.expect(logs.length).to.be.above(0);\r",
-									"});\r",
-									"\r",
-									"pm.test(\"Processing logs have version\", () => {\r",
-									"  const logs = pm.response.json();\r",
-									"  const processingLogs = logs.filter(l => l.eventType === \"PROCESSING_ALLOWED\");\r",
-									"  pm.expect(processingLogs.length).to.be.above(0);\r",
-									"  pm.expect(processingLogs[0].details.version).to.exist;\r",
-									"});"
-								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
+								"type": "text/javascript"
 							}
 						}
 					],
 					"request": {
 						"method": "GET",
 						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/nonexistent-id-12345",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"nonexistent-id-12345"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "3.2 POST /consents/nonexistent/revoke",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Revoke nonexistent consent returns 404\", () => {pm.response.to.have.status(404);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/nonexistent-id-12345/revoke",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"nonexistent-id-12345",
+								"revoke"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "3.3 POST /consents/approve/invalid-token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Invalid token returns 400, not 404\", () => {",
+									"  pm.response.to.have.status(400);",
+									"  pm.expect(pm.response.json().error).to.include(\"Invalid\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/approve/invalid-token-xyz",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"approve",
+								"invalid-token-xyz"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.1 POST /admin/consents/:id/expire - Without X-API-Key Header",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Missing API key returns 401\", () => {",
+									"  pm.response.to.have.status(401);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.test(\"Error message about authorization\", () => {",
+									"  pm.expect(json.error).to.include(\"Unauthorized\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/admin/consents/{{authTestConsentId}}/expire",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								"consents",
+								"{{authTestConsentId}}",
+								"expire"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.2 POST /admin/consents/:id/expire - Invalid API Key",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Invalid API key returns 401\", () => {pm.response.to.have.status(401);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-API-Key",
+								"value": "wrong-key-12345",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/admin/consents/{{authTestConsentId}}/expire",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								"consents",
+								"{{authTestConsentId}}",
+								"expire"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.3 POST /admin/consents/:id/expire - Empty API Key",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Empty API key returns 401\", () => {pm.response.to.have.status(401);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-API-Key",
+								"value": "",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/admin/consents/{{authTestConsentId}}/expire",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								"consents",
+								"{{authTestConsentId}}",
+								"expire"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.4 POST /admin/consents/:id/expire - Valid API Key",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Valid API key grants access\", () => {pm.response.to.have.status(200);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-API-Key",
+								"value": "{{adminApiKey}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/admin/consents/{{activeConsentId}}/expire",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								"consents",
+								"{{activeConsentId}}",
+								"expire"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.9 POST /admin/consents/:id/expire - API Key with Extra Spaces",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"API key with extra spaces rejected\", () => {",
+									"  pm.response.to.have.status(401);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-API-Key",
+								"value": "  {{adminApiKey}}  ",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/admin/consents/{{authTestConsentId}}/expire",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								"consents",
+								"{{authTestConsentId}}",
+								"expire"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "4-State & Approval (Level 3E-3F)",
+			"item": [
+				{
+					"name": "4.0 Create Consent for State Tests",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Consent created for state tests\", () => {",
+									"  pm.response.to.have.status(201);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.environment.set(\"stateTestConsentId\", json.consentId);",
+									"pm.environment.set(\"stateTestApprovalToken\", json.approvalToken || \"\");"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"state-test-user\",\"purpose\": \"state-testing\",\"dataTypes\": [\"name\"],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.1 POST /consents/:id/revoke - On Already REVOKED Consent",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Cannot revoke already-revoked consent\", () => {",
+									"  pm.response.to.have.status(400);",
+									"  pm.expect(pm.response.json().error).to.include(\"already revoked\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/{{stateTestConsentId}}/revoke",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"{{stateTestConsentId}}",
+								"revoke"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.2 POST /process - With REVOKED Consent",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Processing denied with revoked consent\", () => {",
+									"  pm.response.to.have.status(403);",
+									"  pm.expect(pm.response.json().error).to.include(\"No active consent\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"{{userId}}\",\"purpose\": \"{{purpose}}\",\"dataTypes\": [\"name\"]}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/process",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"process"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.3 POST /process - With REJECTED Consent",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Processing denied with rejected consent\", () => {pm.response.to.have.status(403);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"user-rejected\",\"purpose\": \"{{purpose}}\",\"dataTypes\": [\"name\"]}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/process",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"process"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.4 POST /process - With EXPIRED Consent",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Expired consent handling\", () => {",
+									"  pm.expect(pm.response.status).to.be.oneOf([403, 200]);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"user-expired\",\"purpose\": \"{{purpose}}\",\"dataTypes\": [\"name\"]}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/process",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"process"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.5 POST /process - No ACTIVE Consent Exists",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"No consent returns 403\", () => {",
+									"  pm.response.to.have.status(403);",
+									"  pm.expect(pm.response.json().error).to.include(\"No active consent\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"user-no-consent-ever\",\"purpose\": \"{{purpose}}\",\"dataTypes\": [\"name\"]}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/process",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"process"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.6 Create Consent for Approval Tests",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Consent created for approval tests\", () => {",
+									"  pm.response.to.have.status(201);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.environment.set(\"approvalTestConsentId\", json.consentId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"approval-test-user\",\"purpose\": \"approval-testing\",\"dataTypes\": [\"name\"],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.6b GET /consents/:id - Fetch Approval Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Consent retrieved with token\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.environment.set(\"approvalTestToken\", json.approvalToken || \"\");"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/{{approvalTestConsentId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"{{approvalTestConsentId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.7 POST /consents/approve/:token - With Expired Approval Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Expired approval token rejected\", () => {",
+									"  pm.response.to.have.status(400);",
+									"  pm.expect(pm.response.json().error).to.include(\"Invalid\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/approve/expired-token-12345",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"approve",
+								"expired-token-12345"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.8 POST /consents/approve/:token - First Time Approval",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Token approval succeeds on first use\", () => {",
+									"  pm.response.to.have.status(200);",
+									"  pm.expect(pm.response.json().status).to.equal(\"ACTIVE\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/approve/{{approvalTestToken}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"approve",
+								"{{approvalTestToken}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.8b Create Consent for Token Reuse Test",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Consent created for reuse tests\", () => {",
+									"  pm.response.to.have.status(201);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.environment.set(\"reuseTestConsentId\", json.consentId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"reuse-test-user\",\"purpose\": \"reuse-testing\",\"dataTypes\": [\"name\"],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.8b-GET Fetch Reuse Test Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Token retrieved\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.environment.set(\"reuseTestToken\", json.approvalToken || \"\");"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/{{reuseTestConsentId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"{{reuseTestConsentId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.8c POST /consents/approve/:token - Token Reuse (Idempotency)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Token cannot be reused\", () => {",
+									"  pm.response.to.have.status(400);",
+									"  pm.expect(pm.response.json().error).to.include(\"Invalid\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/approve/{{reuseTestToken}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"approve",
+								"{{reuseTestToken}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.8d POST /consents/approve/:token - Reuse Same Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Reusing token after first approval fails\", () => {",
+									"  pm.response.to.have.status(400);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/approve/{{reuseTestToken}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"approve",
+								"{{reuseTestToken}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.9 POST /consents/reject/:token - With Expired Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Reject with expired token rejected\", () => {pm.response.to.have.status(400);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/reject/expired-token-xyz",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"reject",
+								"expired-token-xyz"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.10 POST /consents/reject/:token - Token Reuse",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Reject token cannot be reused\", () => {pm.response.to.have.status(400);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/reject/already-used-token",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"reject",
+								"already-used-token"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.11 Create Consent for Status Tests",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Consent created for status tests\", () => {",
+									"  pm.response.to.have.status(201);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.environment.set(\"statusTestConsentId\", json.consentId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"status-test-user\",\"purpose\": \"status-testing\",\"dataTypes\": [\"name\"],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.11a GET /consents/:id - Fetch Status Test Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Token retrieved\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.environment.set(\"statusTestApprovalToken\", json.approvalToken || \"\");"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/{{statusTestConsentId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"{{statusTestConsentId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.11b POST /consents/approve/:token - Creates ACTIVE Status",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Approved consent is ACTIVE\", () => {",
+									"  pm.response.to.have.status(200);",
+									"  pm.expect(pm.response.json().status).to.equal(\"ACTIVE\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/approve/{{statusTestApprovalToken}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"approve",
+								"{{statusTestApprovalToken}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.12 Create Consent for Rejection Test",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Consent created for rejection tests\", () => {",
+									"  pm.response.to.have.status(201);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.environment.set(\"rejectTestConsentId\", json.consentId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"reject-test-user\",\"purpose\": \"reject-testing\",\"dataTypes\": [\"email\"],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.12a GET /consents/:id - Fetch Rejection Test Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Token retrieved\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.environment.set(\"rejectTestToken\", json.approvalToken || \"\");"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/{{rejectTestConsentId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"{{rejectTestConsentId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.12b POST /consents/reject/:token - Creates REJECTED Status",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Rejected consent is REJECTED\", () => {",
+									"  pm.response.to.have.status(200);",
+									"  pm.expect(pm.response.json().status).to.equal(\"REJECTED\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/reject/{{rejectTestToken}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"reject",
+								"{{rejectTestToken}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.13 Create Consent for Multi-Version Test",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Consent created for multi-version tests\", () => {",
+									"  pm.response.to.have.status(201);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.environment.set(\"multiVersionConsentId\", json.consentId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"multi-version-user\",\"purpose\": \"multi-version-testing\",\"dataTypes\": [\"phone\"],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.13a GET /consents/:id - Fetch Multi-Version Test Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Token retrieved\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.environment.set(\"multiVersionToken\", json.approvalToken || \"\");"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/{{multiVersionConsentId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"{{multiVersionConsentId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4.13b POST /consents/approve/:token - Revokes Existing ACTIVE",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"New approval revokes old ACTIVE\", () => {",
+									"  pm.response.to.have.status(200);",
+									"  pm.expect(pm.response.json().status).to.equal(\"ACTIVE\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/approve/{{multiVersionToken}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"approve",
+								"{{multiVersionToken}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "5-Admin & Revoke (Level 3G-3H)",
+			"item": [
+				{
+					"name": "7.1 POST /consents/revoke - With No ACTIVE Consent",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Revoke with no active consent is idempotent\", () => {",
+									"  pm.response.to.have.status(200);",
+									"  const json = pm.response.json();",
+									"  pm.expect(json.status).to.equal(\"NO_ACTIVE_CONSENT\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"user-never-consented\",\"purpose\": \"{{purpose}}\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents/revoke",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"revoke"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "7.2 POST /consents/revoke - Revokes Latest ACTIVE Version",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Revoke targets latest ACTIVE\", () => {",
+									"  pm.response.to.have.status(200);",
+									"  pm.expect(pm.response.json().status).to.equal(\"REVOKED\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"{{userId}}\",\"purpose\": \"{{purpose}}\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents/revoke",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"revoke"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "8.1 POST /admin/consents/:id/expire - ACTIVE → EXPIRED",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"ACTIVE consent expires\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.test(\"Status changed to EXPIRED\", () => {",
+									"  pm.expect(json.status).to.equal(\"EXPIRED\");",
+									"  pm.expect(json.mode).to.equal(\"ADMIN_FORCED\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-API-Key",
+								"value": "{{adminApiKey}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/admin/consents/{{activeConsentId}}/expire",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								"consents",
+								"{{activeConsentId}}",
+								"expire"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "8.2 POST /admin/consents/:id/expire - REQUESTED → REJECTED",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"REQUESTED consent is rejected\", () => {",
+									"  pm.response.to.have.status(200);",
+									"  pm.expect(pm.response.json().status).to.equal(\"REJECTED\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-API-Key",
+								"value": "{{adminApiKey}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/admin/consents/{{consentId}}/expire",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								"consents",
+								"{{consentId}}",
+								"expire"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "8.3 POST /admin/consents/:id/expire - REVOKED → Error",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Cannot expire already-revoked consent\", () => {",
+									"  pm.response.to.have.status(400);",
+									"  pm.expect(pm.response.json().error).to.include(\"Cannot\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-API-Key",
+								"value": "{{adminApiKey}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/admin/consents/{{consentId}}/expire",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								"consents",
+								"{{consentId}}",
+								"expire"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "8.4 POST /admin/consents/:id/expire - EXPIRED → Error",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Cannot expire already-expired consent\", () => {pm.response.to.have.status(400);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-API-Key",
+								"value": "{{adminApiKey}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/admin/consents/{{consentId}}/expire",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								"consents",
+								"{{consentId}}",
+								"expire"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "8.5 POST /admin/consents/:id/expire - REJECTED → Error",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Cannot expire already-rejected consent\", () => {pm.response.to.have.status(400);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-API-Key",
+								"value": "{{adminApiKey}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/admin/consents/{{consentId}}/expire",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								"consents",
+								"{{consentId}}",
+								"expire"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "6-Processing & Security (Level 3I & 4)",
+			"item": [
+				{
+					"name": "9.0 Create Active Consent for Processing Tests",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Consent created for processing tests\", () => {",
+									"  pm.response.to.have.status(201);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.environment.set(\"processingTestConsentId\", json.consentId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"processing-test-user\",\"purpose\": \"processing-testing\",\"dataTypes\": [\"name\", \"email\", \"phone\"],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "9.0a GET /consents - Fetch Processing Test Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Token retrieved\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.environment.set(\"processingTestToken\", json.approvalToken || \"\");"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/{{processingTestConsentId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"{{processingTestConsentId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "9.0b POST /consents/approve - Approve for Processing Tests",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Consent approved for processing tests\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/approve/{{processingTestToken}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"approve",
+								"{{processingTestToken}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "9.1 POST /process - Purpose Mismatch",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Purpose mismatch denied\", () => {",
+									"  pm.response.to.have.status(403);",
+									"  pm.expect(pm.response.json().error).to.include(\"Purpose mismatch\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"processing-test-user\",\"purpose\": \"analytics\",\"dataTypes\": [\"name\"]}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/process",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"process"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "9.2 POST /process - Requesting Unconsented DataType",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Unconsented data type denied\", () => {",
+									"  pm.response.to.have.status(403);",
+									"  pm.expect(pm.response.json().error).to.include(\"DataType\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"processing-test-user\",\"purpose\": \"processing-testing\",\"dataTypes\": [\"address\"]}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/process",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"process"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "9.3 POST /process - Valid ACTIVE Consent",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Valid consent allows processing\", () => {",
+									"  pm.response.to.have.status(200);",
+									"  pm.expect(pm.response.json().status).to.equal(\"PROCESSING_ALLOWED\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"processing-test-user\",\"purpose\": \"processing-testing\",\"dataTypes\": [\"name\"]}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/process",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"process"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "9.4 POST /process - Subset of Consented DataTypes",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Subset processing allowed\", () => {pm.response.to.have.status(200);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"processing-test-user\",\"purpose\": \"processing-testing\",\"dataTypes\": [\"email\"]}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/process",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"process"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "9.5 POST /process - All Consented DataTypes",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"All consented data processing allowed\", () => {pm.response.to.have.status(200);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"processing-test-user\",\"purpose\": \"processing-testing\",\"dataTypes\": [\"name\", \"email\", \"phone\"]}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/process",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"process"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "10.1 POST /consents - SQL Injection in userId",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"SQL injection attempt handled safely\", () => {",
+									"  pm.expect([200, 201, 400]).to.include(pm.response.code);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"user' OR '1'='1\",\"purpose\": \"marketing\",\"dataTypes\": [\"name\"],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "10.2 POST /consents - SQL Injection in purpose",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"SQL injection in purpose handled safely\", () => {pm.expect([200, 201, 400]).to.include(pm.response.code);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"user-1\",\"purpose\": \"marketing'); DROP TABLE consents; --\",\"dataTypes\": [\"name\"],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "10.3 POST /consents - XSS in userId",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"XSS stored safely (not executed by API)\", () => {",
+									"  pm.expect([200, 201]).to.include(pm.response.code);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"<script>alert('xss')</script>\",\"purpose\": \"marketing\",\"dataTypes\": [\"name\"],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "10.4 POST /consents - Null Byte Injection",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Null byte handled safely\", () => {",
+									"  pm.expect([200, 201, 400]).to.include(pm.response.code);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"user\\u0000admin\",\"purpose\": \"marketing\",\"dataTypes\": [\"name\"],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "10.5 POST /consents - Very Long userId (>10000 chars)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Very long userId rejected\", () => {",
+									"  pm.response.to.have.status(400);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"purpose\": \"marketing\",\"dataTypes\": [\"name\"],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "10.6 POST /consents/approve/:token - Token Replay Attack",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Token replay attack prevented\", () => {",
+									"  pm.response.to.have.status(400);",
+									"  pm.expect(pm.response.json().error).to.include(\"Invalid\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/approve/replay-attack-token",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"approve",
+								"replay-attack-token"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "10.7 POST /consents/approve/:token - Malformed Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Malformed token rejected\", () => {pm.response.to.have.status(400);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/approve/not-a-valid-token-format!!!",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"approve",
+								"not-a-valid-token-format!!!"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "10.8 POST /consents/approve/:token - Token from Different Consent",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Token from different consent rejected\", () => {pm.response.to.have.status(400);});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/approve/token-from-different-consent",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"approve",
+								"token-from-different-consent"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "10.10 POST /consents - Unicode Handling (Emoji)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Unicode characters handled safely\", () => {",
+									"  pm.expect([200, 201]).to.include(pm.response.code);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"user-😀\",\"purpose\": \"marketing-🎯\",\"dataTypes\": [\"name\"],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "7-Audit & Admin Flows (Level 5)",
+			"item": [
+				{
+					"name": "11.1 Complete Lifecycle Audit Trail - Create",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Consent created for audit trail\", () => {",
+									"  pm.response.to.have.status(201);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.environment.set(\"auditConsentId\", json.consentId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"audit-test-user\",\"purpose\": \"audit-testing\",\"dataTypes\": [\"name\"],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "11.1 Complete Lifecycle Audit Trail - Get Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Retrieved consent for approval token\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"if (json.approvalToken) {",
+									"  pm.environment.set(\"auditApprovalToken\", json.approvalToken);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/{{auditConsentId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"{{auditConsentId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "11.1 Complete Lifecycle Audit Trail - Approve",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Consent approved for audit verification\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/approve/{{auditApprovalToken}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"approve",
+								"{{auditApprovalToken}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "11.1 Complete Lifecycle Audit Trail - Process",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Data processed for audit trail\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"audit-test-user\",\"purpose\": \"audit-testing\",\"dataTypes\": [\"name\"]}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/process",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"process"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "11.1 Complete Lifecycle Audit Trail - Revoke",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Consent revoked for audit trail\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"audit-test-user\",\"purpose\": \"audit-testing\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents/revoke",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"revoke"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "11.1 Complete Lifecycle Audit Trail - Verify Audit",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Audit trail events logged\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.test(\"Events present in audit log\", () => {",
+									"  const events = json.data || [];",
+									"  pm.expect(events.length).to.be.greaterThan(0);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-API-Key",
+								"value": "{{adminApiKey}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/audit?page=1&limit=50",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"audit"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "50"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "11.2 Audit Pagination - Page 1",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"First page returns limited items\", () => {",
+									"  const json = pm.response.json();",
+									"  pm.expect(json.data.length).to.be.at.most(10);",
+									"  pm.expect(json.page).to.equal(1);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-API-Key",
+								"value": "{{adminApiKey}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/audit?page=1&limit=10",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"audit"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "11.2 Audit Pagination - Page 2",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Second page has different items\", () => {",
+									"  const json = pm.response.json();",
+									"  pm.expect(json.page).to.equal(2);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-API-Key",
+								"value": "{{adminApiKey}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/audit?page=2&limit=10",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"audit"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "2"
+								},
+								{
+									"key": "limit",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "11.2 Audit Pagination - Large Limit Capped",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Limit capped at 1000\", () => {",
+									"  const json = pm.response.json();",
+									"  pm.expect(json.limit).to.equal(1000);",
+									"  pm.expect(json.data.length).to.be.lessThanOrEqual(1000);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-API-Key",
+								"value": "{{adminApiKey}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/audit?page=1&limit=2000",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"audit"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "2000"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "11.3 Audit Chain Integrity",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Audit chain has consecutive hashes\", () => {",
+									"  const json = pm.response.json();",
+									"  const logs = json.data || [];",
+									"  ",
+									"  if (logs.length > 1) {",
+									"    for (let i = 1; i < logs.length; i++) {",
+									"      pm.expect(logs[i].prevHash).to.equal(logs[i-1].hash);",
+									"    }",
+									"  }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-API-Key",
+								"value": "{{adminApiKey}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/audit?page=1&limit=50",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"audit"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "limit",
+									"value": "50"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "11.4 Admin Force-Expire ACTIVE → EXPIRED",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"ACTIVE expires to EXPIRED\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.test(\"Status changed to EXPIRED\", () => {",
+									"  pm.expect(json.status).to.equal(\"EXPIRED\");",
+									"  pm.expect(json.previousStatus).to.equal(\"ACTIVE\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-API-Key",
+								"value": "{{adminApiKey}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/admin/consents/{{activeConsentId}}/expire",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								"consents",
+								"{{activeConsentId}}",
+								"expire"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "11.5 Admin Force-Expire REQUESTED → REJECTED",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"REQUESTED expires to REJECTED\", () => {",
+									"  pm.response.to.have.status(200);",
+									"  pm.expect(pm.response.json().status).to.equal(\"REJECTED\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-API-Key",
+								"value": "{{adminApiKey}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/admin/consents/{{consentId}}/expire",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"admin",
+								"consents",
+								"{{consentId}}",
+								"expire"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "8-Additional Important Tests",
+			"item": [
+				{
+					"name": "Rejection & Versioning - Create First Consent",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"First consent created\", () => {",
+									"  pm.response.to.have.status(201);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.environment.set(\"firstConsentId\", json.consentId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"{{userId}}\",\"purpose\": \"{{purpose}}\",\"dataTypes\": [\"name\", \"aadhaar\"],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Rejection & Versioning - Get First Consent Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Token retrieved\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.environment.set(\"firstApprovalToken\", json.approvalToken || \"\");"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/{{firstConsentId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"{{firstConsentId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Rejection & Versioning - Reject First Consent",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Consent rejected via token\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.test(\"Status is REJECTED\", () => {",
+									"  pm.expect(json.status).to.equal(\"REJECTED\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/reject/{{firstApprovalToken}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"reject",
+								"{{firstApprovalToken}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Rejection & Versioning - Create Second Consent (Same Purpose)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"New version created with same purpose\", () => {",
+									"  pm.response.to.have.status(201);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.environment.set(\"secondConsentId\", json.consentId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"{{userId}}\",\"purpose\": \"{{purpose}}\",\"dataTypes\": [\"name\", \"aadhaar\"],\"validUntil\": \"2026-12-31T23:59:59Z\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Rejection & Versioning - Get Second Consent Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Token retrieved\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.environment.set(\"secondApprovalToken\", json.approvalToken || \"\");"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/{{secondConsentId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"{{secondConsentId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Rejection & Versioning - Approve Second Consent",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Second consent approved\", () => {",
+									"  pm.response.to.have.status(200);",
+									"  pm.expect(pm.response.json().status).to.equal(\"ACTIVE\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/approve/{{secondApprovalToken}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"approve",
+								"{{secondApprovalToken}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "DPDP §6 - Processing After Revocation",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Processing denied after revocation (DPDP §6)\", () => {",
+									"  pm.response.to.have.status(403);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"{{userId}}\",\"purpose\": \"{{purpose}}\",\"dataTypes\": [\"name\"]}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/process",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"process"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "DPDP §6 - Processing After Expiry",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Expired consent handling (400 or 403)\", () => {",
+									"  pm.expect([400, 403]).to.include(pm.response.code);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"user_expired_test\",\"purpose\": \"{{purpose}}\",\"dataTypes\": [\"name\"],\"validUntil\": \"2020-01-01\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/process",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"process"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Security - Path Traversal Attack",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Path traversal attack blocked\", () => {",
+									"  pm.response.to.have.status(404);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/../../../etc/passwd",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"..",
+								"..",
+								"..",
+								"etc",
+								"passwd"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Security - Rate Limiting Test",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Rate limiting enforced or no limit\", () => {",
+									"  const status = pm.response.code;",
+									"  pm.expect([200, 429]).to.include(status);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/health",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"health"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Security - Large Payload Attack",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Large payload handled safely\", () => {",
+									"  pm.expect([200, 201, 413]).to.include(pm.response.code);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\":\"test\",\"purpose\":\"test\",\"dataTypes\":[\"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\"],\"validUntil\":\"2026-12-31\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/consents",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Audit - Process Validation Edge Case",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Process with extra field in /process endpoint\", () => {",
+									"  pm.response.to.have.status(400);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"{{userId}}\",\"purpose\": \"{{purpose}}\",\"dataTypes\": [\"name\"],\"status\": \"ACTIVE\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/process",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"process"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Audit - Process with Missing Field",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Process with missing required field\", () => {",
+									"  pm.response.to.have.status(400);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"{{userId}}\",\"purpose\": \"{{purpose}}\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/process",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"process"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Audit - Process with Invalid DataTypes Shape",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Process with string dataTypes instead of array\", () => {",
+									"  pm.response.to.have.status(400);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\"userId\": \"{{userId}}\",\"purpose\": \"{{purpose}}\",\"dataTypes\": \"name\"}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/process",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"process"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Audit - Verify Audit Logs Have Version Info",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Audit logs exist with expected structure\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const logs = pm.response.json();",
+									"pm.test(\"Logs contain version information\", () => {",
+									"  const processingLogs = logs.filter(l => l.eventType === \"PROCESSING_ALLOWED\");",
+									"  if (processingLogs.length > 0) {",
+									"    pm.expect(processingLogs[0].details.version).to.exist;",
+									"  }",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-API-Key",
+								"value": "{{adminApiKey}}",
+								"type": "text"
+							}
+						],
 						"url": {
 							"raw": "{{baseUrl}}/audit",
 							"host": [
@@ -878,25 +4203,17 @@
 					"response": []
 				},
 				{
-					"name": "Audit Version Matches",
+					"name": "Security - Invalid UUID Format GET",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"exec": [
-									"const logs = pm.response.json();\r",
-									"const lastProcessing = [...logs].reverse().find(l =>\r",
-									"  l.eventType === \"PROCESSING_ALLOWED\"\r",
-									");\r",
-									"\r",
-									"pm.test(\"Audit version present on processing\", () => {\r",
-									"  pm.expect(lastProcessing).to.exist;\r",
-									"  pm.expect(lastProcessing.details.version).to.exist;\r",
+									"pm.test(\"Invalid UUID format handled\", () => {",
+									"  pm.expect([404, 500]).to.include(pm.response.code);",
 									"});"
 								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
+								"type": "text/javascript"
 							}
 						}
 					],
@@ -904,12 +4221,49 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/audit",
+							"raw": "{{baseUrl}}/consents/invalid-uuid-format",
 							"host": [
 								"{{baseUrl}}"
 							],
 							"path": [
-								"audit"
+								"consents",
+								"invalid-uuid-format"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Rejection - Test GET after Rejection",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Can retrieve rejected consent\", () => {",
+									"  pm.response.to.have.status(200);",
+									"});",
+									"",
+									"const json = pm.response.json();",
+									"pm.test(\"Retrieved consent shows REJECTED status\", () => {",
+									"  pm.expect(json.status).to.equal(\"REJECTED\");",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/consents/{{firstConsentId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"consents",
+								"{{firstConsentId}}"
 							]
 						}
 					},

@@ -12,18 +12,24 @@ export function evaluateConsentPolicy(
     version: number;
   }
 ): PolicyDecision {
-
+  // Defensive check — consent is expected to be ACTIVE
+  // Route handler must ensure authoritative resolution
   // 1️⃣ Consent must be ACTIVE (defense-in-depth)
   if (consent.status !== "ACTIVE") {
     return { allow: false, reason: "Consent not active" };
   }
 
-  // 2️⃣ Purpose must match exactly
+  // 2️⃣ Must be latest version (anti-replay)
+  if (request.version !== consent.version) {
+    return { allow: false, reason: "Stale consent version" };
+  }
+
+  // 3️⃣ Purpose must match exactly
   if (request.purpose !== consent.purpose) {
     return { allow: false, reason: "Purpose mismatch" };
   }
 
-  // 3️⃣ Requested ⊆ Consented (Partial Scope Enforcement)
+  // 4️⃣ Requested ⊆ Consented (Partial Scope Enforcement)
   const consentedSet = new Set(consent.dataTypes);
 
   for (const dt of request.dataTypes) {
