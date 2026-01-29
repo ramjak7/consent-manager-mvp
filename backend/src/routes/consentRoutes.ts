@@ -1,5 +1,6 @@
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { z } from "zod";
+import { validate } from "../middleware/validate";
 import {
   approveConsentByToken,
   rejectConsentByToken,
@@ -8,30 +9,12 @@ import { recordAudit } from "../repositories/auditRepo";
 import { v7 as uuidv7 } from "uuid";
 const router = Router();
 
-const ApprovalSchema = z.object({}).strict();
-const RejectionSchema = z.object({}).strict();
+const EmptyBody = z.object({}).strict();
+const TokenParam = z.object({ token: z.string().min(32) });
+type TokenParams = z.infer<typeof TokenParam>;
 
-const validate = (schema: z.ZodSchema) => (req: any, res: any, next: any) => {
-  // For empty body requests, pass empty object
-  const body = req.body || {};
-  const result = schema.safeParse(body);
-  if (!result.success) {
-    // Return 200 for valid empty requests (approval/rejection with no body)
-    // or 400 if actual validation failed
-    if (Object.keys(body).length === 0 && schema instanceof z.ZodObject) {
-      // Empty body is acceptable for strict empty schemas
-      return next();
-    }
-    return res.status(400).json({ error: result.error.message });
-  }
-  next();
-};
-
-const wrap = (fn: (req: any, res: any, next?: any) => Promise<any>) => 
-  (req: any, res: any, next: any) => Promise.resolve(fn(req, res, next)).catch(next);
-
-router.post("/consents/approve/:token", validate(ApprovalSchema), wrap(async (req: any, res: any) => {
-  const { token } = req.params;
+router.post("/consents/approve/:token", validate({ params: TokenParam, body: EmptyBody }), async (req: Request<TokenParams>, res: Response) => {
+  const token = req.params.token;
 
   const consent = await approveConsentByToken(token);
 
@@ -57,10 +40,10 @@ router.post("/consents/approve/:token", validate(ApprovalSchema), wrap(async (re
     status: "ACTIVE",
     consentId: consent.consentId,
   });
-}));
+});
 
-router.post("/consents/reject/:token", validate(RejectionSchema), wrap(async (req: any, res: any) => {
-  const { token } = req.params;
+router.post("/consents/reject/:token", validate({ params: TokenParam, body: EmptyBody }), async (req: Request<TokenParams>, res: Response) => {
+  const token = req.params.token;
 
   const consent = await rejectConsentByToken(token);
 
@@ -86,6 +69,6 @@ router.post("/consents/reject/:token", validate(RejectionSchema), wrap(async (re
     status: "REJECTED",
     consentId: consent.consentId,
   });
-}));
+});
 
 export default router;

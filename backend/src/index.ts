@@ -1,6 +1,7 @@
 import "dotenv/config";
 // Log the current environment mode (e.g., 'dev', 'staging', 'production') on startup for debugging.
 console.log("Running build:", process.env.NODE_ENV || "dev");
+import { z } from "zod";
 import "./db";
 import { pool } from "./db";
 import cron from "node-cron";
@@ -67,7 +68,7 @@ import { expireDueConsents } from "./jobs/expireConsentsJob";
 // NOTE: expiry is enforced by the cron job below and by the scheduled job
 // Do not use a separate setInterval here to avoid duplicated runs.
 
-app.post("/consents", validate(CreateConsentSchema), wrap(async (req: any, res: any) => {
+app.post("/consents", validate({ body: CreateConsentSchema }), wrap(async (req, res) => {
   const { userId, purpose, dataTypes, validUntil } = req.body;
 
   if (!userId || !purpose || !dataTypes || !validUntil) {
@@ -110,7 +111,11 @@ app.post("/consents", validate(CreateConsentSchema), wrap(async (req: any, res: 
   });
 }));
 
-app.get("/consents/:id", wrap(async (req: any, res: any) => {
+const UuidParamSchema = z.object({
+  id: z.uuid({ message: "Invalid UUID format" })
+});
+
+app.get("/consents/:id", validate({ params: UuidParamSchema }), wrap(async (req, res) => {
   const consentId = req.params.id;
 
   try {
@@ -149,7 +154,7 @@ app.get("/consents/:id", wrap(async (req: any, res: any) => {
   }
 }));
 
-app.post("/consents/:id/revoke", wrap(async (req: any, res: any) => {
+app.post("/consents/:id/revoke", validate({ params: UuidParamSchema }),wrap(async (req, res) => {
   try {
     const consent = await getConsentById(req.params.id);
 
@@ -198,7 +203,7 @@ app.post("/consents/:id/revoke", wrap(async (req: any, res: any) => {
  * User-facing, DPDP-compliant revocation
  * Revokes the latest ACTIVE consent for (userId, purpose)
  */
-app.post("/consents/revoke", validate(RevokeSemanticSchema), wrap(async (req: any, res: any) => {
+app.post("/consents/revoke", validate({ body: RevokeSemanticSchema }), wrap(async (req, res) => {
   const { userId, purpose } = req.body;
 
   if (typeof userId !== "string" || typeof purpose !== "string") {
@@ -309,7 +314,7 @@ cron.schedule("*/10 * * * *", async () => {
   }
 });
 
-app.post("/process", validate(ProcessRequestSchema), wrap(async (req: any, res: any) => {
+app.post("/process", validate({ body: ProcessRequestSchema }), wrap(async (req, res) => {
 
   const { userId, purpose, dataTypes } = req.body;
 
@@ -420,7 +425,7 @@ app.post("/process", validate(ProcessRequestSchema), wrap(async (req: any, res: 
  * Use-case: regulatory, grievance, emergency stop
  * Requires ADMIN_API_KEY in X-API-Key header
  */
-app.post("/admin/consents/:id/expire", requireApiKey, wrap(async (req: any, res: any) => {
+app.post("/admin/consents/:id/expire", requireApiKey, validate({ params: UuidParamSchema }), wrap(async (req, res) => {
   const consentId = req.params.id;
   const consent = await getConsentById(consentId);
 

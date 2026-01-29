@@ -1,0 +1,96 @@
+cmp/
+├── README.md
+├── AI-AGENT.md
+├── artefacts/
+│   ├── 01_legal-conceptual/
+│   │   ├── 01_consent-taxonomy/
+│   │   │   ├── consent_taxonomy.md
+│   │   │   ├── data_categories.md
+│   │   │   ├── purposes.md
+│   │   │   └── terminology_glossary.md
+│   │   │
+│   │   ├── 02_consent-lifecycle/
+│   │   │   ├── consent_lifecycle_flow.md
+│   │   │   └── consent_lifecycle_diagram.png
+│   │   │
+│   │   ├── 03_dpdp-traceability/
+│   │   │   ├── dpdp_traceability_matrix.md
+│   │   │   └── dpdp_sections_reference.md
+│   │
+│   ├── 02_risk-accountability/
+│   │   ├── 04_audit-logging/
+│   │   │   ├── audit_logging_spec.md
+│   │   │   └── audit_event_catalog.md
+│   │   │
+│   │   ├── 05_dpia/
+│   │   │   ├── dpia_report.md
+│   │   │   └── risk_register.md
+│   │   │
+│   │   ├── 06_adrs/
+│   │   │   ├── ADR-001-consent-retention.md
+│   │   │   ├── ADR-002-consent-expiry-model.md
+│   │   │   └── ADR-003-audit-immutability.md
+│   │
+│   ├── 03_system-model/
+│   │   ├── 07_state-machine/
+│   │   │   ├── consent_state_machine.md
+│   │   │   └── consent_state_machine.diagram.png
+│   │   │
+│   │   ├── 08_consent-artefact/
+│   │   │   ├── consent_artefact_schema.json
+│   │   │   └── consent_artefact_examples.json
+│   │   │
+│   │   ├── 09_erd/
+│   │   │   ├── consent_erd.md
+│   │   │   └── consent_erd.diagram.png
+│   │   │
+│   │   ├── 10_dfd/
+│   │   │   ├── dfd_level_0.md
+│   │   │   ├── dfd_level_1.md
+│   │   │   └── dfd_diagrams/
+│   │   │       ├── dfd_l0.png
+│   │   │       └── dfd_l1.png
+│   │
+│   ├── 04_execution-layer/
+│   │   ├── 11_api-spec/
+│   │   │   ├── openapi.yaml
+│   │   │   └── api_error_semantics.md
+│   │   │
+│   │   ├── 12_sops/
+│   │   │   ├── sop_erasure_request.md
+│   │   │   ├── sop_withdraw_consent.md
+│   │   │   └── sop_breach_notification.md
+│   │   │
+│   │   ├── 13_prompt-guidelines/
+│   │   │   └── AI-AGENT.md
+│   │   │
+│   │   ├── 14_multilingual-notices/
+│   │   │   ├── en/
+│   │   │   │   ├── notice_general.md
+│   │   │   │   └── notice_marketing.md
+│   │   │   ├── hi/
+│   │   │   ├── ta/
+│   │   │   ├── te/
+│   │   │   └── README.md
+│   │
+│   └── _index.md
+│
+├── src/
+│   ├── modules/
+│   │   ├── consent/
+│   │   ├── audit/
+│   │   ├── policy/
+│   │   └── dpdp/
+│   ├── db/
+│   │   ├── migrations/
+│   │   └── schema.sql
+│   ├── api/
+│   └── tests/
+│
+├── postman/
+│   ├── CMP-MVP-Tests.postman_collection.json
+│   └── CMP-Local.postman_environment.json
+│
+└── docs/
+    ├── onboarding.md
+    └── developer_guide.md

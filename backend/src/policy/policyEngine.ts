@@ -29,6 +29,9 @@ export function evaluateConsentPolicy(
     return { allow: false, reason: "Purpose mismatch" };
   }
 
+  if (request.dataTypes.length === 0) {
+    return { allow: false, reason: "No dataTypes requested" };
+  }
   // 4️⃣ Requested ⊆ Consented (Partial Scope Enforcement)
   const consentedSet = new Set(consent.dataTypes);
 

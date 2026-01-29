@@ -15,10 +15,10 @@ export type Consent = {
   userId: string;
   purpose: string;
   dataTypes: string[];
-  validUntil: string;
+  validUntil: Date;
   status: ConsentStatus;
   approvalToken: string | null;
-  approvalExpiresAt: string | null;
+  approvalExpiresAt: Date | null;
 };
 
 /** 
@@ -30,9 +30,12 @@ export async function createConsent(input: {
   userId: string;
   purpose: string;
   dataTypes: string[];
-  validUntil: string;
+  validUntil: Date;
 }) {
   const client = await pool.connect();
+  if (new Date(input.validUntil) <= new Date()) {
+    throw new Error("validUntil must be in the future");
+  }
 
   try {
     await client.query("BEGIN");
@@ -56,7 +59,7 @@ export async function createConsent(input: {
     const ttlHours = parseInt(process.env.APPROVAL_TOKEN_TTL_HOURS || "24", 10);
     const approvalExpiresAt = new Date(
       Date.now() + 1000 * 60 * 60 * ttlHours
-    ).toISOString();
+    );
     // 2️⃣ Insert new REQUESTED version (awaits human approval)
 
     await client.query(
@@ -103,17 +106,27 @@ export async function getConsentById(
 
   const row = result.rows[0];
 
+  if (row.status === "ACTIVE" && new Date(row.valid_until) < new Date()) {
+    await expireConsentIfNeeded(row.consent_id);
+    return null;
+  }
+
   return {
     consentId: row.consent_id,
     consentGroupId: row.consent_group_id,
     version: row.version,
     userId: row.user_id,
     purpose: row.purpose,
-    dataTypes: row.data_types,
-    validUntil: row.valid_until,
     status: row.status,
     approvalToken: row.approval_token,
-    approvalExpiresAt: row.approval_expires_at,
+    dataTypes: Array.isArray(row.data_types)
+      ? row.data_types
+      : JSON.parse(row.data_types),
+
+    validUntil: new Date(row.valid_until),
+    approvalExpiresAt: row.approval_expires_at
+      ? new Date(row.approval_expires_at)
+      : null,
   };
 }
 
@@ -143,25 +156,14 @@ export async function getLatestActiveConsent(
 
   const row = result.rows[0];
 
-  return {
-    consentId: row.consent_id,
-    consentGroupId: row.consent_group_id,
-    version: row.version,
-    userId: row.user_id,
-    purpose: row.purpose,
-    dataTypes: row.data_types,
-    validUntil: row.valid_until,
-    status: row.status,
-    approvalToken: row.approval_token,
-    approvalExpiresAt: row.approval_expires_at,
-  };
+  return mapRow(row);
 }
 
 /** 
  * Revokes exactly one consent version.
  * Returns null if consent is not ACTIVE, preventing idempotent revoke of already-revoked consents.
  */
-export async function revokeConsent(consentId: string): Promise<boolean> {
+export async function revokeConsent(consentId: string): Promise<"REVOKED" | "NOT_ACTIVE" | "NOT_FOUND"> {
   const result = await pool.query(
     `
     UPDATE consents
@@ -172,7 +174,14 @@ export async function revokeConsent(consentId: string): Promise<boolean> {
     [consentId]
   );
 
-  return (result.rowCount ?? 0) > 0;
+  if (result.rowCount && result.rowCount > 0) return "REVOKED";
+
+  const check = await pool.query(
+    `SELECT 1 FROM consents WHERE consent_id = $1`,
+    [consentId]
+  );
+
+  return check.rowCount ? "NOT_ACTIVE" : "NOT_FOUND";
 }
 
 /**
@@ -185,7 +194,9 @@ export async function expireConsentIfNeeded(
   const result = await pool.query(
     `
     UPDATE consents
-    SET status = 'EXPIRED'
+    SET status = 'EXPIRED',
+        approval_token = NULL,
+        approval_expires_at = NULL
     WHERE consent_id = $1
       AND status = 'ACTIVE'
       AND valid_until < NOW()
@@ -198,18 +209,7 @@ export async function expireConsentIfNeeded(
 
   const row = result.rows[0];
 
-  return {
-    consentId: row.consent_id,
-    consentGroupId: row.consent_group_id,
-    version: row.version,
-    userId: row.user_id,
-    purpose: row.purpose,
-    dataTypes: row.data_types,
-    validUntil: row.valid_until,
-    status: row.status,
-    approvalToken: row.approval_token,
-    approvalExpiresAt: row.approval_expires_at,
-  };
+  return mapRow(row);
 }
 
 export async function approveConsentByToken(token: string): Promise<Consent | null> {
@@ -262,8 +262,9 @@ export async function approveConsentByToken(token: string): Promise<Consent | nu
       SET status = 'REJECTED'
       WHERE consent_group_id = $1
         AND status = 'REQUESTED'
+        AND consent_id <> $2
       `,
-      [consent.consent_group_id]
+      [consent.consent_group_id, consent.consent_id]
     );
 
     // 3.5️⃣ Revoke any existing ACTIVE consent in the same group
@@ -286,10 +287,16 @@ export async function approveConsentByToken(token: string): Promise<Consent | nu
           approval_token = NULL,
           approval_expires_at = NULL
       WHERE consent_id = $1
+        AND valid_until > NOW()
       RETURNING *
       `,
       [consent.consent_id]
     );
+
+    if (!updated.rows.length) {
+      await client.query("ROLLBACK");
+      return null; // or "EXPIRED" if you later want stronger typing
+    }
 
     await client.query("COMMIT");
 
@@ -303,18 +310,35 @@ export async function approveConsentByToken(token: string): Promise<Consent | nu
   }
 }
 
-function mapRow(row: any): Consent {
+type ConsentRow = {
+  consent_id: string;
+  consent_group_id: string;
+  version: number;
+  user_id: string;
+  purpose: string;
+  data_types: any;
+  valid_until: string;
+  status: ConsentStatus;
+  approval_token: string | null;
+  approval_expires_at: string | null;
+};
+
+function mapRow(row: ConsentRow): Consent {
   return {
     consentId: row.consent_id,
     consentGroupId: row.consent_group_id,
     version: row.version,
     userId: row.user_id,
     purpose: row.purpose,
-    dataTypes: row.data_types,
-    validUntil: row.valid_until,
+    dataTypes: Array.isArray(row.data_types)
+      ? row.data_types
+      : JSON.parse(row.data_types),
+    validUntil: new Date(row.valid_until),
     status: row.status,
     approvalToken: row.approval_token,
-    approvalExpiresAt: row.approval_expires_at,
+    approvalExpiresAt: row.approval_expires_at
+      ? new Date(row.approval_expires_at)
+      : null,
   };
 }
 
@@ -350,11 +374,11 @@ export async function rejectConsentByToken(token: string): Promise<Consent | nul
       SET status = 'REJECTED',
           approval_token = NULL,
           approval_expires_at = NULL
-      WHERE consent_group_id = $1
+      WHERE consent_id = $1
         AND status = 'REQUESTED'
       RETURNING *
       `,
-      [consent.consent_group_id]
+      [consent.consent_id]
     );
 
     await client.query("COMMIT");
