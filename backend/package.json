@@ -9,7 +9,12 @@
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "test": "ts-node src/tests/basic.test.ts",
     "verify-audit": "ts-node src/scripts/verifyAudit.ts",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "db:migrate": "node db/migrate.js migrate",
+    "db:status": "node db/migrate.js status",
+    "db:rollback": "node db/migrate.js rollback",
+    "db:init": "node db/migrate.js init",
+    "db:check": "node db/check.js"
   },
   "keywords": [],
   "author": "",

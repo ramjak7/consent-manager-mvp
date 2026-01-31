@@ -43,7 +43,7 @@ const mockConsent: Consent = {
   userId: "user-1",
   purpose: "marketing",
   dataTypes: ["email", "phone"],
-  validUntil: new Date(Date.now() + 86400000).toISOString(),
+  validUntil: new Date(Date.now() + 86400000),
   status: "ACTIVE",
   approvalToken: null,
   approvalExpiresAt: null,

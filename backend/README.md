@@ -40,11 +40,30 @@ cd backend
 npm install
 ```
 
-### Configuration
+### Configuration & Database Setup
+
+**Quick Start (5 minutes):**
 ```bash
 cp .env.example .env
 # Edit .env with your database credentials
-export $(cat .env | xargs)
+
+# Initialize database (one-time)
+npm run db:init
+
+# Verify database is ready
+npm run db:check
+```
+
+For detailed database management, see [Database Setup Guide](db/README.md) and [Quick Start](db/QUICKSTART.md).
+
+### Database Commands
+
+```bash
+npm run db:init        # Initialize fresh database (dev only)
+npm run db:migrate     # Apply pending migrations
+npm run db:status      # Check migration status
+npm run db:rollback    # Rollback last migration
+npm run db:check       # Health check
 ```
 
 ### Running the Server
@@ -133,11 +152,33 @@ REQUESTED → APPROVED → ACTIVE → (EXPIRED | REVOKED)
 - Recommend adding integration tests with actual database before production
 
 ## Database Schema
-Ensure your PostgreSQL database has these tables:
-- `consents` (consent_id, user_id, purpose, data_types JSONB, status, version, etc.)
-- `audit_logs` (audit_id, event_type, consent_id, user_id, timestamp, details JSONB, hash, prev_hash)
 
-See the original schema documentation or migration files for exact column definitions.
+**Version-Controlled Schema Management:**
+
+All schema is managed through migrations for reproducibility and auditability:
+
+- **Migrations:** `db/migrations/*.sql` - Version-controlled schema changes
+- **Canonical Schema:** `db/canonical/schema.sql` - Authoritative schema reference
+- **Snapshots:** `db/snapshots/schema_full_v1.sql` - Read-only historical snapshot
+
+**Core Tables:**
+
+1. **consents** - Versioned consent records with state machine
+   - Enforces single ACTIVE consent per (user_id, purpose)
+   - Supports full consent history
+   - Tracks approval token lifecycle
+
+2. **audit_logs** - Immutable append-only compliance log
+   - Enforced immutability via trigger
+   - Hash chain prevents tampering
+   - Legal evidence for DPDP compliance
+
+**Key Invariants:**
+- ✅ Only one ACTIVE consent per (user_id, purpose) - enforced by unique index
+- ✅ Audit logs are immutable - enforced by trigger
+- ✅ All schema changes are version-controlled - enforced by migration system
+
+See [Database Guide](db/README.md) for detailed schema documentation, field descriptions, and constraints.
 
 ## Support & Next Steps
 - Run `npm run dev` to start development server on port 3000
