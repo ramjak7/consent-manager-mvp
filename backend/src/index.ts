@@ -8,7 +8,9 @@ import cron from "node-cron";
 import {
   createConsent,
   getConsentById,
+  getConsentByIdAllowExpired,
   getLatestActiveConsent,
+  getLatestActiveConsentAllowExpired,
   revokeConsent,
   expireConsentIfNeeded,
 } from "./repositories/consentRepo";
@@ -81,7 +83,7 @@ app.post("/consents", validate({ body: CreateConsentSchema }), wrap(async (req, 
   //const consentId = `consent_${Date.now()}`;
   const consentId = uuidv7();
 
-  await createConsent({
+  const { approvalToken, approvalExpiresAt } = await createConsent({
     consentId,
     userId,
     purpose,
@@ -106,13 +108,15 @@ app.post("/consents", validate({ body: CreateConsentSchema }), wrap(async (req, 
   res.status(201).json({
     consentId,
     status: "REQUESTED",
+    approvalToken,
+    approvalExpiresAt: approvalExpiresAt.toISOString(),
     //consentMode: 'EXPLICIT' | 'IMPLICIT' // default EXPLICIT
     message: "Consent awaiting approval"
   });
 }));
 
 const UuidParamSchema = z.object({
-  id: z.uuid({ message: "Invalid UUID format" })
+  id: z.string().min(1, "Invalid id")
 });
 
 app.get("/consents/:id", validate({ params: UuidParamSchema }), wrap(async (req, res) => {
@@ -254,15 +258,23 @@ app.post("/consents/revoke", validate({ body: RevokeSemanticSchema }), wrap(asyn
 }));
 
 app.get("/audit", requireApiKey, wrap(async (req: any, res: any) => {
+  const hasPage = typeof req.query.page !== "undefined";
+  const hasLimit = typeof req.query.limit !== "undefined";
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(1000, Math.max(1, Number(req.query.limit) || 100));
   const logs = await getAllAuditLogs();
+
+  if (!hasPage && !hasLimit) {
+    return res.json(logs);
+  }
+
   const total = logs.length;
   const start = (page - 1) * limit;
   res.json({ 
     page, 
     limit, 
     total, 
+    data: logs.slice(start, start + limit),
     logs: logs.slice(start, start + limit),
     pagination: {
       page,
@@ -284,16 +296,10 @@ app.listen(PORT, () => {
  */
 cron.schedule("*/10 * * * *", async () => {
   try {
-    // 1️⃣ Expire ACTIVE consents past validity
-    const expired = await pool.query(`
-      UPDATE consents
-      SET status = 'EXPIRED'
-      WHERE status = 'ACTIVE'
-        AND valid_until < NOW()
-      RETURNING consent_id, user_id
-    `);
+    // 1️⃣ Expire ACTIVE consents past validity (records audits)
+    await expireDueConsents();
 
-    // 2️⃣ Reject stale REQUESTED consents
+    // 2️⃣ Reject stale REQUESTED consents and record audits
     const rejected = await pool.query(`
       UPDATE consents
       SET status = 'REJECTED',
@@ -301,12 +307,27 @@ cron.schedule("*/10 * * * *", async () => {
           approval_expires_at = NULL
       WHERE status = 'REQUESTED'
         AND valid_until < NOW()
-      RETURNING consent_id, user_id
+      RETURNING *
     `);
 
-    if (expired.rowCount || rejected.rowCount) {
+    for (const row of rejected.rows) {
+      await recordAudit({
+        auditId: uuidv7(),
+        eventType: "CONSENT_REJECTED",
+        consentId: row.consent_id,
+        userId: row.user_id,
+        timestamp: new Date().toISOString(),
+        details: {
+          version: row.version,
+          validUntil: row.valid_until,
+          rejectedVia: "SCHEDULED_JOB",
+        },
+      });
+    }
+
+    if (rejected.rowCount) {
       console.log(
-        `[CRON] Expired ${expired.rowCount}, Rejected ${rejected.rowCount} consents`
+        `[CRON] Rejected ${rejected.rowCount} consents`
       );
     }
   } catch (err) {
@@ -319,36 +340,39 @@ app.post("/process", validate({ body: ProcessRequestSchema }), wrap(async (req, 
   const { userId, purpose, dataTypes } = req.body;
 
   // 1️⃣ Resolve authoritative consent
-  const consent = await getLatestActiveConsent(userId, purpose);
+  const consent = await getLatestActiveConsentAllowExpired(userId, purpose);
   
   if (!consent) {
-    // No ACTIVE consent found for this purpose - check if any consent exists to distinguish error
+    const anyActive = await pool.query(
+      `SELECT * FROM consents WHERE user_id = $1 AND status = 'ACTIVE' AND valid_until > NOW() ORDER BY version DESC LIMIT 1`,
+      [userId]
+    );
+
+    if (anyActive.rows.length > 0) {
+      await recordAudit({
+        auditId: uuidv7(),
+        eventType: "PROCESSING_DENIED",
+        consentId: anyActive.rows[0].consent_id,
+        userId,
+        timestamp: new Date().toISOString(),
+        details: {
+          reason: "Purpose mismatch",
+          requestedPurpose: purpose,
+          consentPurpose: anyActive.rows[0].purpose,
+        },
+      });
+      return res.status(403).json({ error: "Purpose mismatch" });
+    }
+
     const anyConsent = await pool.query(
       `SELECT * FROM consents WHERE user_id = $1 AND purpose = $2 LIMIT 1`,
       [userId, purpose]
     );
-    
-    if (anyConsent.rows.length > 0) {
-      // Consent exists but not ACTIVE (revoked, expired, etc.)
-      await recordAudit({
-        auditId: uuidv7(),
-        eventType: "PROCESSING_DENIED",
-        consentId: anyConsent.rows[0].consent_id,
-        userId,
-        timestamp: new Date().toISOString(),
-        details: {
-          reason: "Consent not active",
-          purpose,
-        },
-      });
-      return res.status(403).json({ error: "Consent not active" });
-    }
-    
-    // No consent found at all
+
     await recordAudit({
       auditId: uuidv7(),
       eventType: "PROCESSING_DENIED",
-      consentId: "UNKNOWN",
+      consentId: anyConsent.rows.length ? anyConsent.rows[0].consent_id : "UNKNOWN",
       userId,
       timestamp: new Date().toISOString(),
       details: {
@@ -362,6 +386,7 @@ app.post("/process", validate({ body: ProcessRequestSchema }), wrap(async (req, 
   // 2️⃣ DPDP §6: Check expiry immediately before processing
   const now = new Date();
   if (new Date(consent.validUntil) <= now) {
+    await expireConsentIfNeeded(consent.consentId);
     await recordAudit({
       auditId: uuidv7(),
       eventType: "PROCESSING_DENIED",
@@ -427,46 +452,56 @@ app.post("/process", validate({ body: ProcessRequestSchema }), wrap(async (req, 
  */
 app.post("/admin/consents/:id/expire", requireApiKey, validate({ params: UuidParamSchema }), wrap(async (req, res) => {
   const consentId = req.params.id;
-  const consent = await getConsentById(consentId);
+  const consent = await getConsentByIdAllowExpired(consentId);
 
   if (!consent) {
     return res.status(404).json({ error: "Consent not found" });
   }
 
   let newStatus: "EXPIRED" | "REJECTED";
-  let statusChanged = false;
 
   if (consent.status === "ACTIVE") {
     newStatus = "EXPIRED";
-    statusChanged = true;
   } else if (consent.status === "REQUESTED") {
     newStatus = "REJECTED";
-    statusChanged = true;
   } else {
-    // Already in terminal state - idempotent: return success with current status
-    newStatus = consent.status as "EXPIRED" | "REJECTED";
-    statusChanged = false;
-  }
-
-  if (statusChanged) {
-    await pool.query(
-      `UPDATE consents SET status = $1 WHERE consent_id = $2`,
-      [newStatus, consentId]
-    );
-
+    // Audit the denied admin attempt — DPDP regulatory traceability
     await recordAudit({
       auditId: uuidv7(),
-      eventType: `CONSENT_${newStatus}`,
+      eventType: "ADMIN_EXPIRE_DENIED",
       consentId,
       userId: consent.userId,
       timestamp: new Date().toISOString(),
       details: {
-        forcedBy: "ADMIN",
+        reason: `Cannot expire consent in status ${consent.status}`,
+        currentStatus: consent.status,
+        attemptedBy: "ADMIN",
         version: consent.version,
-        previousStatus: consent.status,
       },
     });
+
+    return res.status(400).json({
+      error: `Cannot expire consent in status ${consent.status}`,
+    });
   }
+
+  await pool.query(
+    `UPDATE consents SET status = $1 WHERE consent_id = $2`,
+    [newStatus, consentId]
+  );
+
+  await recordAudit({
+    auditId: uuidv7(),
+    eventType: `CONSENT_${newStatus}`,
+    consentId,
+    userId: consent.userId,
+    timestamp: new Date().toISOString(),
+    details: {
+      forcedBy: "ADMIN",
+      version: consent.version,
+      previousStatus: consent.status,
+    },
+  });
 
   res.json({
     consentId,

@@ -31,7 +31,7 @@ export async function createConsent(input: {
   purpose: string;
   dataTypes: string[];
   validUntil: Date;
-}) {
+}): Promise<{ approvalToken: string; approvalExpiresAt: Date }> {
   const client = await pool.connect();
   if (new Date(input.validUntil) <= new Date()) {
     throw new Error("validUntil must be in the future");
@@ -82,6 +82,8 @@ export async function createConsent(input: {
     );
 
     await client.query("COMMIT");
+
+    return { approvalToken, approvalExpiresAt };
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
@@ -130,6 +132,23 @@ export async function getConsentById(
   };
 }
 
+/**
+ * Fetches a specific consent version by consentId without expiring it.
+ * Useful for admin operations that must return a record even if time-expired.
+ */
+export async function getConsentByIdAllowExpired(
+  consentId: string
+): Promise<Consent | null> {
+  const result = await pool.query(
+    `SELECT * FROM consents WHERE consent_id = $1`,
+    [consentId]
+  );
+
+  if (!result.rows.length) return null;
+
+  return mapRow(result.rows[0]);
+}
+
 /** 
  * Fetches the latest ACTIVE consent by userId, purpose
  * Used for /process and revoke.
@@ -157,6 +176,32 @@ export async function getLatestActiveConsent(
   const row = result.rows[0];
 
   return mapRow(row);
+}
+
+/**
+ * Fetches latest ACTIVE consent regardless of valid_until.
+ * Used to detect immediate expiry at request time.
+ */
+export async function getLatestActiveConsentAllowExpired(
+  userId: string,
+  purpose: string
+): Promise<Consent | null> {
+  const result = await pool.query(
+    `
+    SELECT *
+    FROM consents
+    WHERE user_id = $1
+      AND purpose = $2
+      AND status = 'ACTIVE'
+    ORDER BY version DESC
+    LIMIT 1
+    `,
+    [userId, purpose]
+  );
+
+  if (!result.rows.length) return null;
+
+  return mapRow(result.rows[0]);
 }
 
 /** 

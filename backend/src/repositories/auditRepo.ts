@@ -9,7 +9,8 @@ export type AuditEventType =
   | "CONSENT_REVOKED"
   | "CONSENT_EXPIRED"
   | "PROCESSING_ALLOWED"
-  | "PROCESSING_DENIED";
+  | "PROCESSING_DENIED"
+  | "ADMIN_EXPIRE_DENIED";
 
 export type AuditLog = {
   auditId: string;

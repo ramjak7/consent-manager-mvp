@@ -9,11 +9,10 @@ import { recordAudit } from "../repositories/auditRepo";
 import { v7 as uuidv7 } from "uuid";
 const router = Router();
 
-const EmptyBody = z.object({}).strict();
-const TokenParam = z.object({ token: z.string().min(32) });
+const TokenParam = z.object({ token: z.string().min(32, "Invalid approval token") });
 type TokenParams = z.infer<typeof TokenParam>;
 
-router.post("/consents/approve/:token", validate({ params: TokenParam, body: EmptyBody }), async (req: Request<TokenParams>, res: Response) => {
+router.post("/consents/approve/:token", validate({ params: TokenParam }), async (req: Request<TokenParams>, res: Response) => {
   const token = req.params.token;
 
   const consent = await approveConsentByToken(token);
@@ -42,7 +41,7 @@ router.post("/consents/approve/:token", validate({ params: TokenParam, body: Emp
   });
 });
 
-router.post("/consents/reject/:token", validate({ params: TokenParam, body: EmptyBody }), async (req: Request<TokenParams>, res: Response) => {
+router.post("/consents/reject/:token", validate({ params: TokenParam }), async (req: Request<TokenParams>, res: Response) => {
   const token = req.params.token;
 
   const consent = await rejectConsentByToken(token);
