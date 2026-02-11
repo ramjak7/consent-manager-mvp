@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { validate } from "../middleware/validate";
+import { tokenEndpointLimiter } from "../middleware/rateLimiter";
 import {
   approveConsentByToken,
   rejectConsentByToken,
@@ -12,7 +13,7 @@ const router = Router();
 const TokenParam = z.object({ token: z.string().min(32, "Invalid approval token") });
 type TokenParams = z.infer<typeof TokenParam>;
 
-router.post("/consents/approve/:token", validate({ params: TokenParam }), async (req: Request<TokenParams>, res: Response) => {
+router.post("/consents/approve/:token", tokenEndpointLimiter, validate({ params: TokenParam }), async (req: Request<TokenParams>, res: Response) => {
   const token = req.params.token;
 
   const consent = await approveConsentByToken(token);
@@ -41,7 +42,7 @@ router.post("/consents/approve/:token", validate({ params: TokenParam }), async 
   });
 });
 
-router.post("/consents/reject/:token", validate({ params: TokenParam }), async (req: Request<TokenParams>, res: Response) => {
+router.post("/consents/reject/:token", tokenEndpointLimiter, validate({ params: TokenParam }), async (req: Request<TokenParams>, res: Response) => {
   const token = req.params.token;
 
   const consent = await rejectConsentByToken(token);

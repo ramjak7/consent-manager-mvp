@@ -16,10 +16,10 @@
  *   - Supports NODE_ENV: dev (default), test, production
  */
 
-require('dotenv').config({ path: '../.env' });
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const fs = require('fs');
-const path = require('path');
 const { Pool } = require('pg');
 
 // ============================================================================

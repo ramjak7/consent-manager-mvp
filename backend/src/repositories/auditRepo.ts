@@ -1,5 +1,6 @@
 import { pool } from "../db";
 import { computeAuditHash } from "../utils/auditHash";
+import { trackAuditEvent } from "../middleware/metrics";
 
 export type AuditEventType =
   | "CONSENT_REQUESTED"
@@ -10,7 +11,11 @@ export type AuditEventType =
   | "CONSENT_EXPIRED"
   | "PROCESSING_ALLOWED"
   | "PROCESSING_DENIED"
-  | "ADMIN_EXPIRE_DENIED";
+  | "ADMIN_EXPIRE_DENIED"
+  | "NOTICE_SHOWN"
+  | "RECEIPT_GENERATED"
+  | "ERASURE_REQUESTED"
+  | "ERASURE_REQUEST_UPDATED";
 
 export type AuditLog = {
   auditId: string;
@@ -63,6 +68,9 @@ export async function recordAudit(
     prevHash,
     hash,
   ]);
+
+  // Track audit event metrics
+  trackAuditEvent(log.eventType);
 }
 
 export async function getAllAuditLogs(): Promise<AuditLog[]> {

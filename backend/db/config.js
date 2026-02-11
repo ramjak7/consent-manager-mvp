@@ -5,7 +5,8 @@
  * Environment variables are read from .env at runtime
  */
 
-require('dotenv').config({ path: '../.env' });
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 module.exports = {
   dev: {

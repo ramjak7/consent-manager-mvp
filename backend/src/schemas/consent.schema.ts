@@ -22,6 +22,18 @@ export const CreateConsentSchema = z.object({
     .refine((s) => new Date(s) > new Date(), {
       message: "validUntil must be a future date",
     }),
+  // Notice binding fields (DPDP compliance)
+  noticeId: z.string()
+    .min(1, "noticeId is required for informed consent")
+    .describe("Identifier of the consent notice shown to data principal"),
+  noticeVersion: z.string()
+    .min(1, "noticeVersion is required")
+    .describe("Version of the consent notice shown"),
+  language: z.string()
+    .min(2, "language must be a valid language code")
+    .max(10, "language code too long")
+    .regex(/^[a-z]{2}(-[A-Z]{2})?$/, "Invalid language code format (e.g., 'en', 'hi', 'en-IN')")
+    .describe("Language code of the notice shown (ISO 639-1)"),
 }).strict();
 
 export const RevokeSemanticSchema = z.object({

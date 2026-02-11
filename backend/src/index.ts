@@ -13,19 +13,51 @@ import {
   getLatestActiveConsentAllowExpired,
   revokeConsent,
   expireConsentIfNeeded,
+  getUserConsents,
 } from "./repositories/consentRepo";
 import {
   recordAudit,
   getAllAuditLogs,
 } from "./repositories/auditRepo";
+import {
+  createErasureRequest,
+  getUserErasureRequests,
+  getErasureRequestById,
+  updateErasureRequestStatus,
+  getAllErasureRequests,
+} from "./repositories/erasureRequestRepo";
+import { generateConsentReceipt, formatReceiptAsText } from "./utils/consentReceipt";
+import { generateReceiptPDF } from "./utils/pdfGenerator";
 import { evaluateConsentPolicy } from "./policy/policyEngine";
 import { ProcessRequestSchema } from "./schemas/process.schema";
 import { CreateConsentSchema, RevokeSemanticSchema } from "./schemas/consent.schema";
+import { 
+  CreateErasureRequestSchema, 
+  UpdateErasureRequestStatusSchema, 
+  GetErasureRequestsQuerySchema,
+  UuidParamSchema as ErasureRequestUuidParamSchema 
+} from "./schemas/erasureRequest.schema";
 import { validate } from "./middleware/validate";
 import { requireApiKey } from "./middleware/auth";
+import { authenticateJWT } from "./middleware/jwtAuth";
+import { requirePermission } from "./middleware/rbac";
+import { 
+  generalLimiter, 
+  consentCreationLimiter, 
+  adminLimiter,
+  processLimiter 
+} from "./middleware/rateLimiter";
 import { v7 as uuidv7 } from "uuid";
 import express from "express";
 import consentRoutes from "./routes/consentRoutes";
+import webhookRoutes from "./routes/webhookRoutes";
+import userRoutes from "./routes/userRoutes";
+import authRoutes from "./routes/authRoutes";
+import { emitWebhookEvent, processWebhookDeliveries } from "./services/webhookService";
+import { logger, requestLogger } from "./utils/logger";
+import { metricsMiddleware, register as metricsRegister, updateActiveConsentsGauge, trackConsentOperation, trackAuditEvent } from "./middleware/metrics";
+import cookieParser from "cookie-parser";
+import cors from "cors";
 
 const app = express();
 const PORT = 3000;
@@ -36,8 +68,25 @@ const wrap = (fn: (req: any, res: any, next?: any) => Promise<any>) =>
   (req: any, res: any, next: any) =>
     Promise.resolve(fn(req, res, next)).catch(next);
 
+// CORS configuration - allow frontend domain
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+    credentials: true, // Important: allow cookies
+  })
+);
+
+// Cookie parser - for httpOnly cookies
+app.use(cookieParser());
+
 // Limit request body size to 1MB
 app.use(express.json({ limit: '1mb' }));
+
+// Structured logging middleware
+app.use(requestLogger);
+
+// Metrics collection middleware
+app.use(metricsMiddleware);
 
 // Request timeout enforcement (30 seconds)
 app.use((req: any, res: any, next: any) => {
@@ -59,21 +108,88 @@ app.use((req: any, res: any, next: any) => {
   next();
 });
 
+// Apply general rate limiting to all routes
+app.use(generalLimiter);
+
 app.use(consentRoutes);
+app.use('/webhooks', webhookRoutes);
+app.use('/auth', authRoutes);
+app.use('/api', userRoutes);
 
 app.get("/health", (req, res) => {
   res.json({ status: "UP" });
 });
 
+/**
+ * Prometheus metrics endpoint
+ * Exposes metrics for scraping by Prometheus
+ */
+app.get("/metrics", async (req, res) => {
+  try {
+    res.set('Content-Type', metricsRegister.contentType);
+    const metrics = await metricsRegister.metrics();
+    res.send(metrics);
+  } catch (error) {
+    logger.error('Failed to generate metrics', { error });
+    res.status(500).send('Failed to generate metrics');
+  }
+});
+
+/**
+ * GET /api/consents
+ * Get consents for the current user (Data Principal Dashboard)
+ * Supports filtering by status, purpose, organization
+ * Supports pagination
+ */
+const GetConsentsQuerySchema = z.object({
+  status: z.enum(['REQUESTED', 'ACTIVE', 'REJECTED', 'REVOKED', 'EXPIRED']).optional(),
+  purpose: z.string().optional(),
+  organizationName: z.string().optional(),
+  page: z.string().regex(/^\d+$/).transform(Number).optional(),
+  limit: z.string().regex(/^\d+$/).transform(Number).optional(),
+  sortBy: z.enum(['created_at', 'valid_until', 'purpose']).optional(),
+  sortOrder: z.enum(['asc', 'desc']).optional(),
+});
+
+app.get(
+  "/api/consents",
+  authenticateJWT,
+  validate({ query: GetConsentsQuerySchema }),
+  wrap(async (req: any, res) => {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { status, purpose, organizationName, page, limit, sortBy, sortOrder } = req.query;
+
+    const result = await getUserConsents({
+      userId: req.user.userId,
+      status,
+      purpose,
+      organizationName,
+      page,
+      limit,
+      sortBy,
+      sortOrder,
+    });
+
+    res.json({
+      success: true,
+      data: result.consents,
+      pagination: result.pagination,
+    });
+  })
+);
+
 import { expireDueConsents } from "./jobs/expireConsentsJob";
 
-// NOTE: expiry is enforced by the cron job below and by the scheduled job
+// NOTE: expiry is enfconsentCreationLimiter, orced by the cron job below and by the scheduled job
 // Do not use a separate setInterval here to avoid duplicated runs.
 
-app.post("/consents", validate({ body: CreateConsentSchema }), wrap(async (req, res) => {
-  const { userId, purpose, dataTypes, validUntil } = req.body;
+app.post("/consents", consentCreationLimiter, validate({ body: CreateConsentSchema }), wrap(async (req, res) => {
+  const { userId, purpose, dataTypes, validUntil, noticeId, noticeVersion, language } = req.body;
 
-  if (!userId || !purpose || !dataTypes || !validUntil) {
+  if (!userId || !purpose || !dataTypes || !validUntil || !noticeId || !noticeVersion || !language) {
     return res.status(400).json({ error: "Missing required fields" });
   }
   if (!Array.isArray(dataTypes) || !dataTypes.every((dt: any) => typeof dt === "string")) {
@@ -89,6 +205,9 @@ app.post("/consents", validate({ body: CreateConsentSchema }), wrap(async (req, 
     purpose,
     dataTypes,
     validUntil,
+    noticeId,
+    noticeVersion,
+    language,
   });
 
   await recordAudit({
@@ -101,7 +220,25 @@ app.post("/consents", validate({ body: CreateConsentSchema }), wrap(async (req, 
       purpose,
       dataTypes,
       validUntil,
-      approvalRequired: true
+      approvalRequired: true,
+      noticeId,
+      noticeVersion,
+      language,
+    },
+  });
+
+  // Emit NOTICE_SHOWN audit event for DPDP compliance
+  await recordAudit({
+    auditId: uuidv7(),
+    eventType: "NOTICE_SHOWN",
+    consentId,
+    userId,
+    timestamp: new Date().toISOString(),
+    details: {
+      noticeId,
+      noticeVersion,
+      language,
+      purpose,
     },
   });
 
@@ -158,6 +295,88 @@ app.get("/consents/:id", validate({ params: UuidParamSchema }), wrap(async (req,
   }
 }));
 
+// 🧾 P0-3: Consent Receipt Export API (ISO/IEC 29184 compliant)
+app.get("/consents/:id/receipt", validate({ params: UuidParamSchema }), wrap(async (req, res) => {
+  const consentId = req.params.id;
+
+  try {
+    // Fetch consent (allow expired for receipt generation)
+    const consent = await getConsentByIdAllowExpired(consentId);
+
+    if (!consent) {
+      return res.status(404).json({ error: "Consent not found" });
+    }
+
+    // Generate ISO/IEC 29184 receipt
+    const receiptId = uuidv7();
+    const receipt = generateConsentReceipt(consent, receiptId);
+
+    // Log receipt generation for audit trail
+    await recordAudit({
+      auditId: uuidv7(),
+      eventType: "RECEIPT_GENERATED",
+      consentId: consent.consentId,
+      userId: consent.userId,
+      timestamp: new Date().toISOString(),
+      details: {
+        receiptId,
+        format: "JSON",
+        version: receipt.version,
+      },
+    });
+
+    res.json(receipt);
+  } catch (err) {
+    console.error("Error generating consent receipt:", err);
+    return res.status(500).json({ error: "Failed to generate consent receipt" });
+  }
+}));
+
+// 🧾 P0-3: Consent Receipt PDF Export
+app.get("/consents/:id/receipt.pdf", validate({ params: UuidParamSchema }), wrap(async (req, res) => {
+  const consentId = req.params.id;
+
+  try {
+    // Fetch consent (allow expired for receipt generation)
+    const consent = await getConsentByIdAllowExpired(consentId);
+
+    if (!consent) {
+      return res.status(404).json({ error: "Consent not found" });
+    }
+
+    // Generate ISO/IEC 29184 receipt
+    const receiptId = uuidv7();
+    const receipt = generateConsentReceipt(consent, receiptId);
+
+    // Generate PDF document
+    const pdfDoc = generateReceiptPDF(receipt);
+
+    // Log receipt generation for audit trail
+    await recordAudit({
+      auditId: uuidv7(),
+      eventType: "RECEIPT_GENERATED",
+      consentId: consent.consentId,
+      userId: consent.userId,
+      timestamp: new Date().toISOString(),
+      details: {
+        receiptId,
+        format: "PDF",
+        version: receipt.version,
+      },
+    });
+
+    // Set headers for PDF download
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="consent-receipt-${consentId}.pdf"`);
+
+    // Pipe PDF to response
+    pdfDoc.pipe(res);
+  } catch (err) {
+    console.error("Error generating PDF receipt:", err);
+    return res.status(500).json({ error: "Failed to generate PDF receipt" });
+  }
+}));
+
 app.post("/consents/:id/revoke", validate({ params: UuidParamSchema }),wrap(async (req, res) => {
   try {
     const consent = await getConsentById(req.params.id);
@@ -190,6 +409,14 @@ app.post("/consents/:id/revoke", validate({ params: UuidParamSchema }),wrap(asyn
       userId: consent.userId,
       timestamp: new Date().toISOString(),
       details: { status: "REVOKED" },
+    });
+
+    // Emit webhook event for Data Fiduciaries
+    await emitWebhookEvent('CONSENT_REVOKED', {
+      consentId: consent.consentId,
+      userId: consent.userId,
+      purpose: consent.purpose,
+      revokedAt: new Date().toISOString(),
     });
 
     res.json({
@@ -251,13 +478,21 @@ app.post("/consents/revoke", validate({ body: RevokeSemanticSchema }), wrap(asyn
     }
   });
 
+  // Emit webhook event
+  await emitWebhookEvent('CONSENT_REVOKED', {
+    consentId: consent.consentId,
+    userId,
+    purpose,
+    revokedAt: new Date().toISOString(),
+  });
+
   res.json({
     status: "REVOKED",
     purpose
   });
 }));
 
-app.get("/audit", requireApiKey, wrap(async (req: any, res: any) => {
+app.get("/audit", adminLimiter, authenticateJWT, requirePermission("AUDIT_READ"), wrap(async (req: any, res: any) => {
   const hasPage = typeof req.query.page !== "undefined";
   const hasLimit = typeof req.query.limit !== "undefined";
   const page = Math.max(1, Number(req.query.page) || 1);
@@ -285,7 +520,242 @@ app.get("/audit", requireApiKey, wrap(async (req: any, res: any) => {
   });
 }));
 
+// ============================================================================
+// ACTIVITY LOG ENDPOINT (Data Principal's own audit events)
+// ============================================================================
+
+/**
+ * GET /api/activity-log
+ * Get audit events for the current user (Data Principal Dashboard)
+ * This endpoint allows users to view their own activity without AUDIT_READ permission
+ */
+app.get(
+  "/api/activity-log",
+  generalLimiter,
+  authenticateJWT,
+  wrap(async (req: any, res) => {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const hasPage = typeof req.query.page !== "undefined";
+    const hasLimit = typeof req.query.limit !== "undefined";
+    const page = Math.max(1, Number(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
+
+    const allLogs = await getAllAuditLogs();
+    
+    // Filter logs for current user only
+    const userLogs = allLogs.filter(log => log.userId === req.user.userId);
+
+    // Sort by timestamp descending (most recent first)
+    userLogs.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    if (!hasPage && !hasLimit) {
+      return res.json({
+        success: true,
+        data: userLogs,
+      });
+    }
+
+    const total = userLogs.length;
+    const start = (page - 1) * limit;
+    const paginatedLogs = userLogs.slice(start, start + limit);
+
+    res.json({
+      success: true,
+      data: paginatedLogs,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    });
+  })
+);
+
+// ============================================================================
+// ERASURE REQUEST ENDPOINTS (DPDP Section 12(1) - Right to Erasure)
+// ============================================================================
+
+/**
+ * POST /api/erasure-requests
+ * Create a new erasure request (Data Principal)
+ */
+app.post(
+  "/api/erasure-requests",
+  generalLimiter,
+  authenticateJWT,
+  validate({ body: CreateErasureRequestSchema }),
+  wrap(async (req: any, res) => {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { reason, additionalNotes } = req.body;
+
+    const request = await createErasureRequest({
+      userId: req.user.userId,
+      reason,
+      additionalNotes,
+    });
+
+    // Record audit event
+    await recordAudit({
+      auditId: uuidv7(),
+      eventType: "ERASURE_REQUESTED",
+      consentId: "N/A", // No specific consent
+      userId: req.user.userId,
+      timestamp: new Date().toISOString(),
+      details: {
+        requestId: request.requestId,
+        reason,
+      },
+    });
+
+    res.status(201).json({
+      success: true,
+      data: request,
+    });
+  })
+);
+
+/**
+ * GET /api/erasure-requests
+ * Get all erasure requests for the current user
+ */
+app.get(
+  "/api/erasure-requests",
+  generalLimiter,
+  authenticateJWT,
+  wrap(async (req: any, res) => {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const requests = await getUserErasureRequests(req.user.userId);
+
+    res.json({
+      success: true,
+      data: requests,
+    });
+  })
+);
+
+/**
+ * GET /api/erasure-requests/:id
+ * Get a specific erasure request by ID
+ */
+app.get(
+  "/api/erasure-requests/:id",
+  generalLimiter,
+  authenticateJWT,
+  validate({ params: ErasureRequestUuidParamSchema }),
+  wrap(async (req: any, res) => {
+    if (!req.user) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const request = await getErasureRequestById(req.params.id);
+
+    if (!request) {
+      return res.status(404).json({ error: "Erasure request not found" });
+    }
+
+    // Only allow user to view their own requests
+    if (request.userId !== req.user.userId) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    res.json({
+      success: true,
+      data: request,
+    });
+  })
+);
+
+/**
+ * GET /admin/erasure-requests
+ * Get all erasure requests (Admin only)
+ */
+app.get(
+  "/admin/erasure-requests",
+  adminLimiter,
+  authenticateJWT,
+  requirePermission("ADMIN"),
+  validate({ query: GetErasureRequestsQuerySchema }),
+  wrap(async (req: any, res) => {
+    const { status, page, limit } = req.query;
+
+    const result = await getAllErasureRequests({
+      status,
+      page: page ? parseInt(page, 10) : undefined,
+      limit: limit ? parseInt(limit, 10) : undefined,
+    });
+
+    res.json({
+      success: true,
+      data: result.requests,
+      pagination: result.pagination,
+    });
+  })
+);
+
+/**
+ * PATCH /admin/erasure-requests/:id/status
+ * Update erasure request status (Admin only)
+ */
+app.patch(
+  "/admin/erasure-requests/:id/status",
+  adminLimiter,
+  authenticateJWT,
+  requirePermission("ADMIN"),
+  validate({ 
+    params: ErasureRequestUuidParamSchema, 
+    body: UpdateErasureRequestStatusSchema 
+  }),
+  wrap(async (req: any, res) => {
+    const { status, reviewNotes } = req.body;
+
+    const updated = await updateErasureRequestStatus({
+      requestId: req.params.id,
+      status,
+      reviewerId: req.user?.userId,
+      reviewNotes,
+    });
+
+    if (!updated) {
+      return res.status(404).json({ error: "Erasure request not found" });
+    }
+
+    // Record audit event
+    await recordAudit({
+      auditId: uuidv7(),
+      eventType: "ERASURE_REQUEST_UPDATED",
+      consentId: "N/A",
+      userId: updated.userId,
+      timestamp: new Date().toISOString(),
+      details: {
+        requestId: updated.requestId,
+        status,
+        reviewerId: req.user?.userId,
+      },
+    });
+
+    res.json({
+      success: true,
+      data: updated,
+    });
+  })
+);
+
 app.listen(PORT, () => {
+  logger.info('Consent Manager backend running', { 
+    port: PORT,
+    environment: process.env.NODE_ENV || 'dev',
+    metricsEnabled: true,
+  });
   console.log(`Consent Manager backend running on port ${PORT}`);
 });
 
@@ -335,7 +805,31 @@ cron.schedule("*/10 * * * *", async () => {
   }
 });
 
-app.post("/process", validate({ body: ProcessRequestSchema }), wrap(async (req, res) => {
+/**
+ * Webhook delivery processor
+ * Runs every 2 minutes to process pending webhook deliveries with retry logic
+ */
+cron.schedule("*/2 * * * *", async () => {
+  try {
+    await processWebhookDeliveries();
+  } catch (err) {
+    logger.error('[CRON] Webhook delivery job failed', { error: err });
+  }
+});
+
+/**
+ * Metrics update job
+ * Updates Prometheus gauges every 5 minutes
+ */
+cron.schedule("*/5 * * * *", async () => {
+  try {
+    await updateActiveConsentsGauge(pool);
+  } catch (err) {
+    logger.error('[CRON] Metrics update job failed', { error: err });
+  }
+});
+
+app.post("/process", processLimiter, validate({ body: ProcessRequestSchema }), wrap(async (req, res) => {
 
   const { userId, purpose, dataTypes } = req.body;
 
@@ -448,9 +942,9 @@ app.post("/process", validate({ body: ProcessRequestSchema }), wrap(async (req, 
 /**
  * ADMIN: Force-expire a consent immediately
  * Use-case: regulatory, grievance, emergency stop
- * Requires ADMIN_API_KEY in X-API-Key header
+ * Requires JWT authentication with CONSENT_FORCE_EXPIRE permission
  */
-app.post("/admin/consents/:id/expire", requireApiKey, validate({ params: UuidParamSchema }), wrap(async (req, res) => {
+app.post("/admin/consents/:id/expire", adminLimiter, authenticateJWT, requirePermission("CONSENT_FORCE_EXPIRE"), validate({ params: UuidParamSchema }), wrap(async (req, res) => {
   const consentId = req.params.id;
   const consent = await getConsentByIdAllowExpired(consentId);
 

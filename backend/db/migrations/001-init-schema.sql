@@ -112,7 +112,9 @@ COMMENT ON INDEX uniq_active_consent_per_purpose IS 'Business invariant: only on
 -- ============================================================================
 
 -- Prevent any modification to audit logs
-CREATE TRIGGER IF NOT EXISTS audit_no_update 
+DROP TRIGGER IF EXISTS audit_no_update ON public.audit_logs;
+
+CREATE TRIGGER audit_no_update 
     BEFORE DELETE OR UPDATE ON public.audit_logs 
     FOR EACH ROW 
     EXECUTE FUNCTION public.prevent_audit_mutation();

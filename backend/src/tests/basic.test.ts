@@ -47,6 +47,10 @@ const mockConsent: Consent = {
   status: "ACTIVE",
   approvalToken: null,
   approvalExpiresAt: null,
+  noticeId: "notice-v1",
+  noticeVersion: "1.0.0",
+  language: "en",
+  noticeShownAt: new Date(),
 };
 
 let passedTests = 0;

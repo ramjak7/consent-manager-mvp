@@ -1,5 +1,6 @@
 import { pool } from "../db";
 import { generateApprovalToken } from "../utils/approvalToken";
+import { trackConsentOperation } from "../middleware/metrics";
 
 export type ConsentStatus =
   | "REQUESTED"
@@ -19,6 +20,11 @@ export type Consent = {
   status: ConsentStatus;
   approvalToken: string | null;
   approvalExpiresAt: Date | null;
+  // Notice binding fields (DPDP compliance)
+  noticeId: string | null;
+  noticeVersion: string | null;
+  language: string | null;
+  noticeShownAt: Date | null;
 };
 
 /** 
@@ -31,6 +37,9 @@ export async function createConsent(input: {
   purpose: string;
   dataTypes: string[];
   validUntil: Date;
+  noticeId: string;
+  noticeVersion: string;
+  language: string;
 }): Promise<{ approvalToken: string; approvalExpiresAt: Date }> {
   const client = await pool.connect();
   if (new Date(input.validUntil) <= new Date()) {
@@ -65,8 +74,8 @@ export async function createConsent(input: {
     await client.query(
       `
       INSERT INTO consents
-      (consent_id, consent_group_id, version, user_id, purpose, data_types, valid_until, status, approval_token, approval_expires_at)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,'REQUESTED',$8,$9)
+      (consent_id, consent_group_id, version, user_id, purpose, data_types, valid_until, status, approval_token, approval_expires_at, notice_id, notice_version, language, notice_shown_at)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,'REQUESTED',$8,$9,$10,$11,$12,NOW())
       `,
       [
         input.consentId,
@@ -78,14 +87,19 @@ export async function createConsent(input: {
         input.validUntil,
         approvalToken,
         approvalExpiresAt,
+        input.noticeId,
+        input.noticeVersion,
+        input.language,
       ]
     );
 
     await client.query("COMMIT");
 
+    trackConsentOperation('CREATE', 'success');
     return { approvalToken, approvalExpiresAt };
   } catch (err) {
     await client.query("ROLLBACK");
+    trackConsentOperation('CREATE', 'failure');
     throw err;
   } finally {
     client.release();
@@ -113,23 +127,7 @@ export async function getConsentById(
     return null;
   }
 
-  return {
-    consentId: row.consent_id,
-    consentGroupId: row.consent_group_id,
-    version: row.version,
-    userId: row.user_id,
-    purpose: row.purpose,
-    status: row.status,
-    approvalToken: row.approval_token,
-    dataTypes: Array.isArray(row.data_types)
-      ? row.data_types
-      : JSON.parse(row.data_types),
-
-    validUntil: new Date(row.valid_until),
-    approvalExpiresAt: row.approval_expires_at
-      ? new Date(row.approval_expires_at)
-      : null,
-  };
+  return mapRow(row);
 }
 
 /**
@@ -219,12 +217,19 @@ export async function revokeConsent(consentId: string): Promise<"REVOKED" | "NOT
     [consentId]
   );
 
-  if (result.rowCount && result.rowCount > 0) return "REVOKED";
+  if (result.rowCount && result.rowCount > 0) {
+    trackConsentOperation('REVOKE', 'success');
+    return "REVOKED";
+  }
 
   const check = await pool.query(
     `SELECT 1 FROM consents WHERE consent_id = $1`,
     [consentId]
   );
+
+  if (!check.rowCount) {
+    trackConsentOperation('REVOKE', 'failure');
+  }
 
   return check.rowCount ? "NOT_ACTIVE" : "NOT_FOUND";
 }
@@ -252,6 +257,7 @@ export async function expireConsentIfNeeded(
 
   if (!result.rows.length) return null;
 
+  trackConsentOperation('EXPIRE', 'success');
   const row = result.rows[0];
 
   return mapRow(row);
@@ -340,15 +346,18 @@ export async function approveConsentByToken(token: string): Promise<Consent | nu
 
     if (!updated.rows.length) {
       await client.query("ROLLBACK");
+      trackConsentOperation('APPROVE', 'failure');
       return null; // or "EXPIRED" if you later want stronger typing
     }
 
     await client.query("COMMIT");
 
+    trackConsentOperation('APPROVE', 'success');
     return mapRow(updated.rows[0]);
 
   } catch (err) {
     await client.query("ROLLBACK");
+    trackConsentOperation('APPROVE', 'failure');
     throw err;
   } finally {
     client.release();
@@ -366,6 +375,10 @@ type ConsentRow = {
   status: ConsentStatus;
   approval_token: string | null;
   approval_expires_at: string | null;
+  notice_id: string | null;
+  notice_version: string | null;
+  language: string | null;
+  notice_shown_at: string | null;
 };
 
 function mapRow(row: ConsentRow): Consent {
@@ -384,6 +397,10 @@ function mapRow(row: ConsentRow): Consent {
     approvalExpiresAt: row.approval_expires_at
       ? new Date(row.approval_expires_at)
       : null,
+    noticeId: row.notice_id || null,
+    noticeVersion: row.notice_version || null,
+    language: row.language || null,
+    noticeShownAt: row.notice_shown_at ? new Date(row.notice_shown_at) : null,
   };
 }
 
@@ -428,12 +445,129 @@ export async function rejectConsentByToken(token: string): Promise<Consent | nul
 
     await client.query("COMMIT");
 
+    trackConsentOperation('REJECT', 'success');
     return mapRow(updated.rows[0]);
 
   } catch (err) {
     await client.query("ROLLBACK");
+    trackConsentOperation('REJECT', 'failure');
     throw err;
   } finally {
     client.release();
   }
+}
+
+/**
+ * Get consents for a user with filtering and pagination
+ * Used for Data Principal Dashboard
+ */
+export async function getUserConsents(params: {
+  userId: string;
+  status?: ConsentStatus | ConsentStatus[];
+  purpose?: string;
+  organizationName?: string;
+  page?: number;
+  limit?: number;
+  sortBy?: 'created_at' | 'valid_until' | 'purpose';
+  sortOrder?: 'asc' | 'desc';
+}): Promise<{
+  consents: Consent[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}> {
+  const {
+    userId,
+    status,
+    purpose,
+    organizationName,
+    page = 1,
+    limit = 10,
+    sortBy = 'created_at',
+    sortOrder = 'desc',
+  } = params;
+
+  // Build WHERE clause dynamically
+  const conditions: string[] = ['user_id = $1'];
+  const values: any[] = [userId];
+  let paramIndex = 2;
+
+  // Filter by status (single or multiple)
+  if (status) {
+    if (Array.isArray(status)) {
+      conditions.push(`status = ANY($${paramIndex})`);
+      values.push(status);
+    } else {
+      conditions.push(`status = $${paramIndex}`);
+      values.push(status);
+    }
+    paramIndex++;
+  }
+
+  // Filter by purpose (partial match)
+  if (purpose) {
+    conditions.push(`purpose ILIKE $${paramIndex}`);
+    values.push(`%${purpose}%`);
+    paramIndex++;
+  }
+
+  // Filter by organization name (stored in metadata)
+  if (organizationName) {
+    conditions.push(`metadata->>'organizationName' ILIKE $${paramIndex}`);
+    values.push(`%${organizationName}%`);
+    paramIndex++;
+  }
+
+  const whereClause = conditions.join(' AND ');
+
+  // Get total count
+  const countResult = await pool.query(
+    `SELECT COUNT(*) as total FROM consents WHERE ${whereClause}`,
+    values
+  );
+
+  const total = parseInt(countResult.rows[0].total);
+  const pages = Math.ceil(total / limit);
+  const offset = (page - 1) * limit;
+
+  // Get paginated results
+  const sortColumn = sortBy === 'created_at' ? 'created_at' : 
+                     sortBy === 'valid_until' ? 'valid_until' : 
+                     'purpose';
+  
+  const result = await pool.query(
+    `
+    SELECT *
+    FROM consents
+    WHERE ${whereClause}
+    ORDER BY ${sortColumn} ${sortOrder.toUpperCase()}, version DESC
+    LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `,
+    [...values, limit, offset]
+  );
+
+  // Check for expired consents and update status
+  const consents = result.rows.map(row => {
+    const consent = mapRow(row);
+    // Auto-expire if needed
+    if (consent.status === 'ACTIVE' && consent.validUntil < new Date()) {
+      // Note: We don't update the DB here, just mark in response
+      // The cron job will handle DB updates
+      return { ...consent, status: 'EXPIRED' as ConsentStatus };
+    }
+    return consent;
+  });
+
+  return {
+    consents,
+    pagination: {
+      page,
+      limit,
+      total,
+      pages,
+    },
+  };
 }
