@@ -60,7 +60,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 
 const app = express();
-const PORT = 3000;
+const PORT = parseInt(process.env.PORT || '3000', 10);
 const REQUEST_TIMEOUT_MS = 30000; // 30 seconds
 
 // async wrapper to catch errors from async route handlers
@@ -750,7 +750,7 @@ app.patch(
   })
 );
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
   logger.info('Consent Manager backend running', { 
     port: PORT,
     environment: process.env.NODE_ENV || 'dev',
