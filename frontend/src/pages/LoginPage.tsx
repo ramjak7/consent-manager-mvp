@@ -1,7 +1,8 @@
 export function LoginPage() {
   const handleLogin = () => {
     // Redirect to backend OAuth2 endpoint
-    window.location.href = '/auth/login';
+    const apiUrl = import.meta.env.VITE_API_URL || '';
+    window.location.href = `${apiUrl}/auth/login`;
   };
 
   return (

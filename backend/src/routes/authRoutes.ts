@@ -16,9 +16,10 @@ router.get('/login', (req, res) => {
 
   if (useMockAuth) {
     // Mock OAuth2 flow (development + demo mode)
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    const mockAuthUrl = `${frontendUrl}/auth/callback?code=dev-mock-${Date.now()}`;
-    return res.redirect(mockAuthUrl);
+    // Redirect to own callback which will handle JWT creation and redirect to frontend
+    const backendUrl = `${req.protocol}://${req.get('host')}`;
+    const mockCallbackUrl = `${backendUrl}/auth/callback?code=dev-mock-${Date.now()}`;
+    return res.redirect(mockCallbackUrl);
   }
 
   // Production mode: Redirect to real OAuth2 provider
@@ -57,11 +58,10 @@ router.get('/callback', async (req, res) => {
   }
 
   try {
-    const isDevelopment = process.env.NODE_ENV !== 'production';
-
     let userInfo;
 
-    if (isDevelopment && code.toString().startsWith('dev-mock-')) {
+    const useMockAuth = process.env.OAUTH2_ISSUER === 'mock' || process.env.NODE_ENV !== 'production';
+    if (useMockAuth && code.toString().startsWith('dev-mock-')) {
       // Development mode: Mock user info
       // Use consistent sub to avoid duplicate user creation
       userInfo = {
@@ -132,17 +132,18 @@ router.get('/callback', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // Set JWT as httpOnly cookie
+    // Set JWT as httpOnly cookie (for same-domain deployments)
     res.cookie('auth_token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
-    // Redirect to frontend dashboard
+    // Redirect to frontend dashboard with token
+    // Token in URL is used for cross-domain deployments (Vercel ↔ Railway)
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    res.redirect(`${frontendUrl}/dashboard`);
+    res.redirect(`${frontendUrl}/auth/callback?token=${token}`);
   } catch (error) {
     console.error('OAuth callback error:', error);
     res.status(500).json({

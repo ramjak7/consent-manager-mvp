@@ -10,8 +10,8 @@ export function AuthCallbackPage() {
 
   useEffect(() => {
     const handleCallback = async () => {
-      // Get authorization code from URL
-      const code = searchParams.get('code');
+      // Check for token in URL (cross-domain auth flow)
+      const token = searchParams.get('token');
       const errorParam = searchParams.get('error');
       const errorDescription = searchParams.get('error_description');
 
@@ -21,22 +21,29 @@ export function AuthCallbackPage() {
         return;
       }
 
-      // Check for authorization code
+      if (token) {
+        // Token received directly from backend redirect
+        localStorage.setItem('auth_token', token);
+        navigate('/dashboard', { replace: true });
+        return;
+      }
+
+      // Fallback: Get authorization code from URL (same-domain flow)
+      const code = searchParams.get('code');
       if (!code) {
-        setError('No authorization code received');
+        setError('No authorization code or token received');
         return;
       }
 
       try {
         // Call backend to exchange code for token
-        // Backend will handle the OAuth2 code exchange and set httpOnly cookie
-        const response = await fetch(`/auth/callback?code=${code}`, {
+        const apiUrl = import.meta.env.VITE_API_URL || '';
+        const response = await fetch(`${apiUrl}/auth/callback?code=${code}`, {
           method: 'GET',
-          credentials: 'include', // Important: include cookies
+          credentials: 'include',
         });
 
         if (response.ok) {
-          // Successfully authenticated, redirect to dashboard
           navigate('/dashboard', { replace: true });
         } else {
           const data = await response.json();
