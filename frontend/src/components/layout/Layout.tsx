@@ -13,10 +13,10 @@ export function Layout({ children }: LayoutProps) {
   const handleLogout = async () => {
     try {
       await authApi.logout();
-      window.location.href = '/login';
     } catch (error) {
       console.error('Logout failed:', error);
-      // Force logout anyway
+    } finally {
+      localStorage.removeItem('auth_token');
       window.location.href = '/login';
     }
   };
