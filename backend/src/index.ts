@@ -60,6 +60,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 
 const app = express();
+app.set('trust proxy', 1); // Trust first proxy (Railway/reverse proxy)
 const PORT = parseInt(process.env.PORT || '3000', 10);
 const REQUEST_TIMEOUT_MS = 30000; // 30 seconds
 
