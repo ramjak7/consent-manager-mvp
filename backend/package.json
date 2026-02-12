@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "node db/migrate.js migrate && node dist/index.js",
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
     "test": "ts-node src/tests/basic.test.ts",
     "verify-audit": "ts-node src/scripts/verifyAudit.ts",
