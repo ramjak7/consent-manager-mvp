@@ -12,12 +12,12 @@ const router = express.Router();
  * In development: Use mock OAuth2 flow
  */
 router.get('/login', (req, res) => {
-  const isDevelopment = process.env.NODE_ENV !== 'production';
+  const useMockAuth = process.env.OAUTH2_ISSUER === 'mock' || process.env.NODE_ENV !== 'production';
 
-  if (isDevelopment) {
-    // Development mode: Use mock OAuth2 flow
-    // Redirect to mock authorization page
-    const mockAuthUrl = `http://localhost:5173/auth/callback?code=dev-mock-${Date.now()}`;
+  if (useMockAuth) {
+    // Mock OAuth2 flow (development + demo mode)
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const mockAuthUrl = `${frontendUrl}/auth/callback?code=dev-mock-${Date.now()}`;
     return res.redirect(mockAuthUrl);
   }
 
