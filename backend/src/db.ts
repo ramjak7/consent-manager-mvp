@@ -1,37 +1,48 @@
 import { Pool, PoolConfig } from "pg";
 import * as fs from "fs";
 
-const poolConfig: PoolConfig = {
-  host: process.env.PG_HOST || "localhost",
-  port: Number(process.env.PG_PORT || 5432),
-  user: process.env.PG_USER || "postgres",
-  database: process.env.PG_DATABASE || "consent_manager",
-};
+// Support both DATABASE_URL (Railway/cloud) and individual PG_* vars (local dev)
+let poolConfig: PoolConfig;
 
-// Only set password if provided
-if (process.env.PG_PASSWORD) {
-  poolConfig.password = process.env.PG_PASSWORD;
-}
-
-// SSL/TLS Configuration (Production)
-// Enable with PG_SSL=true and provide certificate paths
-if (process.env.PG_SSL === "true") {
-  poolConfig.ssl = {
-    rejectUnauthorized: process.env.PG_SSL_REJECT_UNAUTHORIZED !== "false",
+if (process.env.DATABASE_URL) {
+  poolConfig = {
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production' 
+      ? { rejectUnauthorized: false } 
+      : undefined,
+  };
+  console.log("✅ Using DATABASE_URL for PostgreSQL connection");
+} else {
+  poolConfig = {
+    host: process.env.PG_HOST || "localhost",
+    port: Number(process.env.PG_PORT || 5432),
+    user: process.env.PG_USER || "postgres",
+    database: process.env.PG_DATABASE || "consent_manager",
   };
 
-  // Load SSL certificates if paths provided
-  if (process.env.PG_SSL_CA) {
-    poolConfig.ssl.ca = fs.readFileSync(process.env.PG_SSL_CA).toString();
-  }
-  if (process.env.PG_SSL_CERT) {
-    poolConfig.ssl.cert = fs.readFileSync(process.env.PG_SSL_CERT).toString();
-  }
-  if (process.env.PG_SSL_KEY) {
-    poolConfig.ssl.key = fs.readFileSync(process.env.PG_SSL_KEY).toString();
+  // Only set password if provided
+  if (process.env.PG_PASSWORD) {
+    poolConfig.password = process.env.PG_PASSWORD;
   }
 
-  console.log("✅ PostgreSQL SSL/TLS enabled");
+  // SSL/TLS Configuration (Production)
+  if (process.env.PG_SSL === "true") {
+    poolConfig.ssl = {
+      rejectUnauthorized: process.env.PG_SSL_REJECT_UNAUTHORIZED !== "false",
+    };
+    if (process.env.PG_SSL_CA) {
+      poolConfig.ssl.ca = fs.readFileSync(process.env.PG_SSL_CA).toString();
+    }
+    if (process.env.PG_SSL_CERT) {
+      poolConfig.ssl.cert = fs.readFileSync(process.env.PG_SSL_CERT).toString();
+    }
+    if (process.env.PG_SSL_KEY) {
+      poolConfig.ssl.key = fs.readFileSync(process.env.PG_SSL_KEY).toString();
+    }
+    console.log("✅ PostgreSQL SSL/TLS enabled");
+  }
+
+  console.log(`✅ Using individual PG_* vars (host: ${poolConfig.host})`);
 }
 
 // Encryption key configuration (for pgcrypto)

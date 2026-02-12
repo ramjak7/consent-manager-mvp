@@ -29,31 +29,44 @@ const { Pool } = require('pg');
 const ENV = process.env.NODE_ENV || 'dev';
 const MIGRATIONS_DIR = path.join(__dirname, 'migrations');
 
-const config = {
-  dev: {
-    host: process.env.PG_HOST || 'localhost',
-    port: Number(process.env.PG_PORT || 5432),
-    user: process.env.PG_USER || 'postgres',
-    password: process.env.PG_PASSWORD || '',
-    database: process.env.PG_DATABASE || 'consent_manager',
-  },
-  test: {
-    host: process.env.PG_HOST_TEST || 'localhost',
-    port: Number(process.env.PG_PORT_TEST || 5432),
-    user: process.env.PG_USER_TEST || 'postgres',
-    password: process.env.PG_PASSWORD_TEST || '',
-    database: process.env.PG_DATABASE_TEST || 'consent_manager_test',
-  },
-  production: {
-    host: process.env.PG_HOST,
-    port: Number(process.env.PG_PORT || 5432),
-    user: process.env.PG_USER,
-    password: process.env.PG_PASSWORD,
-    database: process.env.PG_DATABASE,
-  },
-};
+// Support DATABASE_URL (Railway/cloud) or individual PG_* vars (local dev)
+let dbConfig;
 
-const dbConfig = config[ENV];
+if (process.env.DATABASE_URL) {
+  dbConfig = {
+    connectionString: process.env.DATABASE_URL,
+    ssl: process.env.NODE_ENV === 'production'
+      ? { rejectUnauthorized: false }
+      : undefined,
+  };
+  console.log(`📦 Running migrations in [${ENV}] environment (using DATABASE_URL)...`);
+} else {
+  const configs = {
+    dev: {
+      host: process.env.PG_HOST || 'localhost',
+      port: Number(process.env.PG_PORT || 5432),
+      user: process.env.PG_USER || 'postgres',
+      password: process.env.PG_PASSWORD || '',
+      database: process.env.PG_DATABASE || 'consent_manager',
+    },
+    test: {
+      host: process.env.PG_HOST_TEST || 'localhost',
+      port: Number(process.env.PG_PORT_TEST || 5432),
+      user: process.env.PG_USER_TEST || 'postgres',
+      password: process.env.PG_PASSWORD_TEST || '',
+      database: process.env.PG_DATABASE_TEST || 'consent_manager_test',
+    },
+    production: {
+      host: process.env.PG_HOST,
+      port: Number(process.env.PG_PORT || 5432),
+      user: process.env.PG_USER,
+      password: process.env.PG_PASSWORD,
+      database: process.env.PG_DATABASE,
+    },
+  };
+  dbConfig = configs[ENV];
+  console.log(`📦 Running migrations in [${ENV}] environment...`);
+}
 
 // ============================================================================
 // MIGRATION TRACKER
