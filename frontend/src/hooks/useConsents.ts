@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { consentApi } from '../api/consent.api';
 import type { GetConsentsParams } from '../api/consent.api';
-import type { ConsentListResponse, Consent } from '../types/consent.types';
+import type { ConsentListResponse, Consent, ConsentGrantRequest } from '../types/consent.types';
 
 /**
  * Hook to fetch consents with filters and pagination
@@ -22,6 +22,20 @@ export function useConsent(consentId: string) {
     queryKey: ['consent', consentId],
     queryFn: () => consentApi.getConsentById(consentId),
     enabled: !!consentId,
+  });
+}
+
+/**
+ * Hook to grant (create) a new consent
+ */
+export function useGrantConsent() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: ConsentGrantRequest) => consentApi.grantConsent(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['consents'] });
+    },
   });
 }
 

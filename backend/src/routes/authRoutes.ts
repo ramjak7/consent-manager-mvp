@@ -158,7 +158,13 @@ router.get('/callback', async (req, res) => {
  * Clears authentication cookie
  */
 router.post('/logout', (req, res) => {
-  res.clearCookie('auth_token');
+  // Options MUST match what was used in res.cookie() — otherwise browsers ignore the clear
+  res.clearCookie('auth_token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'strict',
+    path: '/',
+  });
   res.json({ message: 'Logged out successfully' });
 });
 

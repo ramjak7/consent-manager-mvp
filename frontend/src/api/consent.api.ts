@@ -1,5 +1,5 @@
-import { apiRequest } from './client';
-import type { Consent, ConsentListResponse } from '../types/consent.types';
+import { apiRequest, apiClient } from './client';
+import type { Consent, ConsentListResponse, ConsentGrantRequest } from '../types/consent.types';
 
 export interface GetConsentsParams {
   status?: 'REQUESTED' | 'ACTIVE' | 'REJECTED' | 'REVOKED' | 'EXPIRED';
@@ -46,6 +46,17 @@ export const consentApi = {
   },
 
   /**
+   * Grant (create) a new consent
+   */
+  async grantConsent(data: ConsentGrantRequest): Promise<{ consentId: string; status: string; approvalToken: string; approvalExpiresAt: string; message: string }> {
+    return apiRequest({
+      method: 'POST',
+      url: '/consents',
+      data,
+    });
+  },
+
+  /**
    * Revoke a consent
    */
   async revokeConsent(consentId: string): Promise<{ status: string; message: string }> {
@@ -53,5 +64,33 @@ export const consentApi = {
       method: 'POST',
       url: `/consents/${consentId}/revoke`,
     });
+  },
+
+  /**
+   * Download consent receipt as JSON
+   */
+  async getReceipt(consentId: string): Promise<Record<string, unknown>> {
+    return apiRequest<Record<string, unknown>>({
+      method: 'GET',
+      url: `/consents/${consentId}/receipt`,
+    });
+  },
+
+  /**
+   * Download consent receipt as PDF (returns blob URL)
+   */
+  async downloadReceiptPdf(consentId: string): Promise<void> {
+    const response = await apiClient.get(`/consents/${consentId}/receipt.pdf`, {
+      responseType: 'blob',
+    });
+    const blob = new Blob([response.data], { type: 'application/pdf' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `consent-receipt-${consentId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
   },
 };

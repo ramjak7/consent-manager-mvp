@@ -3,9 +3,12 @@ import { LoginPage } from '@pages/LoginPage';
 import { AuthCallbackPage } from '@pages/AuthCallbackPage';
 import { DashboardPage } from '@pages/DashboardPage';
 import { ConsentListPage } from '@pages/ConsentListPage';
+import { ConsentDetailPage } from '@pages/ConsentDetailPage';
+import { GrantConsentPage } from '@pages/GrantConsentPage';
 import { ErasureRequestPage } from '@pages/ErasureRequestPage';
 import { ErasureRequestListPage } from '@pages/ErasureRequestListPage';
 import { ActivityLogPage } from '@pages/ActivityLogPage';
+import { DfDashboardPage } from '@pages/DfDashboardPage';
 import { Layout } from '@components/layout/Layout';
 import { ProtectedRoute } from '@components/common/ProtectedRoute';
 
@@ -29,10 +32,12 @@ function App() {
           <Route index element={<Navigate to="/dashboard" replace />} />
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="consents" element={<ConsentListPage />} />
+          <Route path="consents/:id" element={<ConsentDetailPage />} />
+          <Route path="grant-consent" element={<GrantConsentPage />} />
           <Route path="erasure-request" element={<ErasureRequestPage />} />
           <Route path="erasure-requests" element={<ErasureRequestListPage />} />
           <Route path="activity-log" element={<ActivityLogPage />} />
-          {/* Add more protected routes here */}
+          <Route path="df-dashboard" element={<DfDashboardPage />} />
         </Route>
 
         {/* Catch-all route */}

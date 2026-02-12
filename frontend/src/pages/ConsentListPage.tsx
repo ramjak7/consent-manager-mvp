@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useConsents } from '../hooks/useConsents';
 import { ConsentStatusBadge } from '@components/consent/ConsentStatusBadge';
 import { RevokeConsentModal } from '@components/consent/RevokeConsentModal';
@@ -17,6 +17,7 @@ export function ConsentListPage() {
   });
   const [selectedConsent, setSelectedConsent] = useState<Consent | null>(null);
   const [isRevokeModalOpen, setIsRevokeModalOpen] = useState(false);
+  const navigate = useNavigate();
 
   const { data, isLoading, error, refetch } = useConsents(filters);
 
@@ -244,7 +245,7 @@ export function ConsentListPage() {
                       </td>
                       <td className="px-6 py-4 text-right text-sm">
                         <button
-                          onClick={() => alert('View details coming soon!')}
+                          onClick={() => navigate(`/consents/${consent.consentId}`)}
                           className="text-primary hover:text-primary-hover font-medium mr-3"
                         >
                           View

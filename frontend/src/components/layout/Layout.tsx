@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, NavLink } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useCurrentUser } from '@hooks/useAuth';
 import { authApi } from '@api/auth.api';
 
@@ -7,8 +8,19 @@ interface LayoutProps {
   children?: ReactNode;
 }
 
+const navItems = [
+  { to: '/dashboard', label: 'Dashboard', icon: '🏠' },
+  { to: '/consents', label: 'My Consents', icon: '📋' },
+  { to: '/grant-consent', label: 'Grant Consent', icon: '✅' },
+  { to: '/erasure-request', label: 'Erasure Request', icon: '🗑️' },
+  { to: '/erasure-requests', label: 'My Requests', icon: '📝' },
+  { to: '/activity-log', label: 'Activity Log', icon: '📊' },
+  { to: '/df-dashboard', label: 'DF Analytics', icon: '📈' },
+];
+
 export function Layout({ children }: LayoutProps) {
   const { data: user } = useCurrentUser();
+  const queryClient = useQueryClient();
 
   const handleLogout = async () => {
     try {
@@ -16,6 +28,7 @@ export function Layout({ children }: LayoutProps) {
     } catch (error) {
       console.error('Logout failed:', error);
     } finally {
+      queryClient.clear();
       localStorage.removeItem('auth_token');
       window.location.href = '/login';
     }
@@ -61,10 +74,61 @@ export function Layout({ children }: LayoutProps) {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {children || <Outlet />}
-      </main>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex gap-8">
+        {/* Sidebar Navigation */}
+        <aside className="hidden md:block w-56 flex-shrink-0">
+          <nav className="card p-2 sticky top-8">
+            <ul className="space-y-1">
+              {navItems.map((item) => (
+                <li key={item.to}>
+                  <NavLink
+                    to={item.to}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        isActive
+                          ? 'bg-primary text-white'
+                          : 'text-gray-700 hover:bg-gray-100'
+                      }`
+                    }
+                  >
+                    <span>{item.icon}</span>
+                    {item.label}
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        </aside>
+
+        {/* Mobile Navigation */}
+        <div className="md:hidden w-full mb-4">
+          <div className="card p-2 overflow-x-auto">
+            <div className="flex gap-1">
+              {navItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) =>
+                    `flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
+                      isActive
+                        ? 'bg-primary text-white'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`
+                  }
+                >
+                  <span>{item.icon}</span>
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <main className="flex-1 min-w-0">
+          {children || <Outlet />}
+        </main>
+      </div>
 
       {/* Footer */}
       <footer className="bg-white border-t border-gray-200 mt-auto">

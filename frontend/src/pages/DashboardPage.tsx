@@ -1,10 +1,11 @@
 import { useCurrentUser } from '@hooks/useAuth';
 import { useConsents } from '@hooks/useConsents';
 import { ConsentStatusBadge } from '@components/consent/ConsentStatusBadge';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 export function DashboardPage() {
   const { data: user } = useCurrentUser();
+  const navigate = useNavigate();
   
   // Fetch all consents to calculate counts
   const { data: consentsData } = useConsents({ limit: 100 }); // Fetch more to get accurate counts
@@ -54,7 +55,7 @@ export function DashboardPage() {
         <div className="card mb-8">
           <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
           <div className="flex flex-wrap gap-4">
-            <button className="btn-primary">Grant New Consent</button>
+            <button onClick={() => navigate('/grant-consent')} className="btn-primary">Grant New Consent</button>
             <Link to="/erasure-request" className="btn-danger">
               Request Data Erasure
             </Link>
