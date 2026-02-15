@@ -1,6 +1,6 @@
 import express from 'express';
 import jwt from 'jsonwebtoken';
-import { findOrCreateOAuthUser } from '../repositories/userRepo';
+import { findOrCreateOAuthUser, getUserRoles, assignRoleToUser, getRoleByName } from '../repositories/userRepo';
 
 const router = express.Router();
 
@@ -13,12 +13,13 @@ const router = express.Router();
  */
 router.get('/login', (req, res) => {
   const useMockAuth = process.env.OAUTH2_ISSUER === 'mock' || process.env.NODE_ENV !== 'production';
+  const portal = (req.query.portal as string) || 'dp'; // dp or df
 
   if (useMockAuth) {
     // Mock OAuth2 flow (development + demo mode)
     // Redirect to own callback which will handle JWT creation and redirect to frontend
     const backendUrl = `${req.protocol}://${req.get('host')}`;
-    const mockCallbackUrl = `${backendUrl}/auth/callback?code=dev-mock-${Date.now()}`;
+    const mockCallbackUrl = `${backendUrl}/auth/callback?code=dev-mock-${Date.now()}&portal=${portal}`;
     return res.redirect(mockCallbackUrl);
   }
 
@@ -39,6 +40,7 @@ router.get('/login', (req, res) => {
   authUrl.searchParams.set('redirect_uri', redirectUri);
   authUrl.searchParams.set('response_type', 'code');
   authUrl.searchParams.set('scope', 'openid profile email');
+  authUrl.searchParams.set('state', portal); // Pass portal type through OAuth state
 
   res.redirect(authUrl.toString());
 });
@@ -48,7 +50,9 @@ router.get('/login', (req, res) => {
  * Handles OAuth2 authorization code and exchanges it for user info
  */
 router.get('/callback', async (req, res) => {
-  const { code } = req.query;
+  const { code, portal, state } = req.query;
+  // portal comes from mock flow, state comes from real OAuth2 flow
+  const portalType = (portal as string) || (state as string) || 'dp';
 
   if (!code) {
     return res.status(400).json({
@@ -63,13 +67,22 @@ router.get('/callback', async (req, res) => {
     const useMockAuth = process.env.OAUTH2_ISSUER === 'mock' || process.env.NODE_ENV !== 'production';
     if (useMockAuth && code.toString().startsWith('dev-mock-')) {
       // Development mode: Mock user info
-      // Use consistent sub to avoid duplicate user creation
-      userInfo = {
-        sub: 'dev-user-12345',
-        iss: 'consent-manager-dev',
-        email: 'developer@example.com',
-        name: 'Development User',
-      };
+      // Use different mock users for DP vs DF to demonstrate role separation
+      if (portalType === 'df') {
+        userInfo = {
+          sub: 'dev-df-user-67890',
+          iss: 'consent-manager-dev',
+          email: 'fiduciary@example.com',
+          name: 'Demo Data Fiduciary',
+        };
+      } else {
+        userInfo = {
+          sub: 'dev-user-12345',
+          iss: 'consent-manager-dev',
+          email: 'developer@example.com',
+          name: 'Development User',
+        };
+      }
     } else {
       // Production mode: Exchange code for access token
       const tokenResponse = await fetch(process.env.OAUTH2_TOKEN_URL!, {
@@ -115,6 +128,21 @@ router.get('/callback', async (req, res) => {
       name: userInfo.name,
     });
 
+    // Ensure user has the appropriate role for their portal
+    const existingRoles = await getUserRoles(user.userId);
+    const roleNames = existingRoles.map(r => r.roleName);
+    if (portalType === 'df') {
+      if (!roleNames.includes('DF_CLIENT') && !roleNames.includes('ADMIN') && !roleNames.includes('SUPER_ADMIN')) {
+        const dfRole = await getRoleByName('DF_CLIENT');
+        if (dfRole) await assignRoleToUser({ userId: user.userId, roleId: dfRole.roleId });
+      }
+    } else {
+      if (!roleNames.includes('DP_USER')) {
+        const dpRole = await getRoleByName('DP_USER');
+        if (dpRole) await assignRoleToUser({ userId: user.userId, roleId: dpRole.roleId });
+      }
+    }
+
     // Generate JWT token
     const jwtSecret = process.env.JWT_SECRET;
     if (!jwtSecret) {
@@ -143,7 +171,7 @@ router.get('/callback', async (req, res) => {
     // P1-7: Redirect to frontend without token in URL
     // The httpOnly cookie (set above) handles auth via withCredentials: true
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    res.redirect(`${frontendUrl}/auth/callback`);
+    res.redirect(`${frontendUrl}/auth/callback?portal=${portalType}`);
   } catch (error) {
     console.error('OAuth callback error:', error);
     res.status(500).json({

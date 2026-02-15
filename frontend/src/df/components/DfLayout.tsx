@@ -50,9 +50,6 @@ export function DfLayout({ children }: DfLayoutProps) {
             </div>
 
             <div className="flex items-center gap-4">
-              <a href="/dp/dashboard" className="text-sm text-indigo-300 hover:text-white transition-colors">
-                Switch to DP View
-              </a>
               {user && (
                 <>
                   <div className="text-right hidden md:block">

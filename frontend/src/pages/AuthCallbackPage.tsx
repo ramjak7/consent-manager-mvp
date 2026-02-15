@@ -22,11 +22,12 @@ export function AuthCallbackPage() {
 
       // P1-7: Cookie-only auth — the httpOnly cookie was set by the backend
       // during the /auth/callback redirect. No token in URL needed.
-      // Fetch user profile to determine role-based redirect.
+      // Use portal param passed back from backend to determine redirect.
+      const portal = searchParams.get('portal') || 'dp';
       try {
-        const user = await authApi.getCurrentUser();
-        const roles = user.roles?.map((r: { roleName: string }) => r.roleName) ?? [];
-        if (roles.includes('DF_CLIENT') || roles.includes('ADMIN') || roles.includes('SUPER_ADMIN')) {
+        // Verify auth is valid by fetching user profile
+        await authApi.getCurrentUser();
+        if (portal === 'df') {
           navigate('/df/dashboard', { replace: true });
         } else {
           navigate('/dp/dashboard', { replace: true });

@@ -7,7 +7,7 @@ export function LoginPage() {
 
   const handleLogin = () => {
     const apiUrl = import.meta.env.VITE_API_URL || '';
-    window.location.href = `${apiUrl}/auth/login`;
+    window.location.href = `${apiUrl}/auth/login?portal=${portal}`;
   };
 
   const config = isDF
