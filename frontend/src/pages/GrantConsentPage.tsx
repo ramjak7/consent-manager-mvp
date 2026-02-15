@@ -89,7 +89,6 @@ export function GrantConsentPage() {
 
     try {
       const result = await grantConsent.mutateAsync({
-        userId: user.userId,
         purpose,
         dataTypes: form.dataTypes,
         validUntil: new Date(form.validUntil).toISOString(),

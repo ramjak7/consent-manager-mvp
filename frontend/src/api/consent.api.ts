@@ -27,7 +27,7 @@ export const consentApi = {
     if (params?.sortOrder) queryParams.append('sortOrder', params.sortOrder);
 
     const query = queryParams.toString();
-    const url = `/api/consents${query ? `?${query}` : ''}`;
+    const url = `/api/v1/consents${query ? `?${query}` : ''}`;
 
     return apiRequest<ConsentListResponse>({
       method: 'GET',
@@ -41,7 +41,7 @@ export const consentApi = {
   async getConsentById(consentId: string): Promise<Consent> {
     return apiRequest<Consent>({
       method: 'GET',
-      url: `/consents/${consentId}`,
+      url: `/api/v1/consents/${consentId}`,
     });
   },
 
@@ -51,7 +51,7 @@ export const consentApi = {
   async grantConsent(data: ConsentGrantRequest): Promise<{ consentId: string; status: string; approvalToken: string; approvalExpiresAt: string; message: string }> {
     return apiRequest({
       method: 'POST',
-      url: '/consents',
+      url: '/api/v1/consents',
       data,
     });
   },
@@ -62,7 +62,7 @@ export const consentApi = {
   async revokeConsent(consentId: string): Promise<{ status: string; message: string }> {
     return apiRequest<{ status: string; message: string }>({
       method: 'POST',
-      url: `/consents/${consentId}/revoke`,
+      url: `/api/v1/consents/${consentId}/revoke`,
     });
   },
 
@@ -72,7 +72,7 @@ export const consentApi = {
   async getReceipt(consentId: string): Promise<Record<string, unknown>> {
     return apiRequest<Record<string, unknown>>({
       method: 'GET',
-      url: `/consents/${consentId}/receipt`,
+      url: `/api/v1/consents/${consentId}/receipt`,
     });
   },
 
@@ -80,7 +80,7 @@ export const consentApi = {
    * Download consent receipt as PDF (returns blob URL)
    */
   async downloadReceiptPdf(consentId: string): Promise<void> {
-    const response = await apiClient.get(`/consents/${consentId}/receipt.pdf`, {
+    const response = await apiClient.get(`/api/v1/consents/${consentId}/receipt.pdf`, {
       responseType: 'blob',
     });
     const blob = new Blob([response.data], { type: 'application/pdf' });
@@ -88,6 +88,27 @@ export const consentApi = {
     const a = document.createElement('a');
     a.href = url;
     a.download = `consent-receipt-${consentId}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+  },
+
+  /**
+   * Bulk Data Portability Export — DPDP §13
+   * Downloads all user data as JSON or CSV
+   */
+  async exportData(format: 'json' | 'csv' = 'json'): Promise<void> {
+    const response = await apiClient.get(`/api/v1/consents/export?format=${format}`, {
+      responseType: 'blob',
+    });
+    const ext = format === 'csv' ? 'csv' : 'json';
+    const mimeType = format === 'csv' ? 'text/csv' : 'application/json';
+    const blob = new Blob([response.data], { type: mimeType });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `my-data-${new Date().toISOString().slice(0, 10)}.${ext}`;
     document.body.appendChild(a);
     a.click();
     a.remove();

@@ -21,7 +21,7 @@ export async function getActivityLogs(
     queryParams.append('limit', params.limit.toString());
   }
 
-  const url = `/api/activity-log${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
+  const url = `/api/v1/activity-log${queryParams.toString() ? '?' + queryParams.toString() : ''}`;
   const response = await apiClient.get<ActivityLogListResponse>(url);
   
   return {

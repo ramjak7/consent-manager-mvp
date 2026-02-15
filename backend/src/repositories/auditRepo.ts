@@ -15,7 +15,9 @@ export type AuditEventType =
   | "NOTICE_SHOWN"
   | "RECEIPT_GENERATED"
   | "ERASURE_REQUESTED"
-  | "ERASURE_REQUEST_UPDATED";
+  | "ERASURE_REQUEST_UPDATED"
+  | "CORRECTION_REQUESTED"
+  | "CORRECTION_REQUEST_UPDATED";
 
 export type AuditLog = {
   auditId: string;
@@ -88,4 +90,54 @@ export async function getAllAuditLogs(): Promise<AuditLog[]> {
     prevHash: row.prev_hash,
     hash: row.hash,
   }));
+}
+
+/**
+ * P1-4: SQL-level filtering by userId with pagination
+ * Replaces the O(n) in-memory filtering approach
+ */
+export async function getAuditLogsByUserId(
+  userId: string,
+  options?: { page?: number; limit?: number; eventType?: string }
+): Promise<{ logs: AuditLog[]; total: number; page: number; limit: number }> {
+  const page = options?.page ?? 1;
+  const limit = Math.min(options?.limit ?? 50, 200);
+  const offset = (page - 1) * limit;
+
+  let whereClause = "WHERE user_id = $1";
+  const params: any[] = [userId];
+  let paramIdx = 2;
+
+  if (options?.eventType) {
+    whereClause += ` AND event_type = $${paramIdx}`;
+    params.push(options.eventType);
+    paramIdx++;
+  }
+
+  // Count total
+  const countResult = await pool.query(
+    `SELECT COUNT(*) AS total FROM audit_logs ${whereClause}`,
+    params
+  );
+  const total = parseInt(countResult.rows[0].total, 10);
+
+  // Fetch page
+  const dataParams = [...params, limit, offset];
+  const result = await pool.query(
+    `SELECT * FROM audit_logs ${whereClause} ORDER BY timestamp DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+    dataParams
+  );
+
+  const logs = result.rows.map(row => ({
+    auditId: row.audit_id,
+    eventType: row.event_type,
+    consentId: row.consent_id,
+    userId: row.user_id,
+    timestamp: row.timestamp,
+    details: row.details,
+    prevHash: row.prev_hash,
+    hash: row.hash,
+  }));
+
+  return { logs, total, page, limit };
 }

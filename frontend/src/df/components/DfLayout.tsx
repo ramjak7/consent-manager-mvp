@@ -4,21 +4,19 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useCurrentUser } from '@hooks/useAuth';
 import { authApi } from '@api/auth.api';
 
-interface LayoutProps {
+interface DfLayoutProps {
   children?: ReactNode;
 }
 
-const navItems = [
-  { to: '/dp/dashboard', label: 'Dashboard', icon: '🏠' },
-  { to: '/dp/consents', label: 'My Consents', icon: '📋' },
-  { to: '/dp/grant-consent', label: 'Grant Consent', icon: '✅' },
-  { to: '/dp/erasure-request', label: 'Erasure Request', icon: '🗑️' },
-  { to: '/dp/erasure-requests', label: 'My Requests', icon: '📝' },
-  { to: '/dp/correction-request', label: 'Data Correction', icon: '✏️' },
-  { to: '/dp/activity-log', label: 'Activity Log', icon: '📊' },
+const dfNavItems = [
+  { to: '/df/dashboard', label: 'Analytics', icon: '📈' },
+  { to: '/df/erasure-requests', label: 'Erasure Requests', icon: '🗑️' },
+  { to: '/df/correction-requests', label: 'Corrections', icon: '✏️' },
+  { to: '/df/purposes', label: 'Purposes', icon: '🎯' },
+  { to: '/df/processors', label: 'Processors', icon: '🏭' },
 ];
 
-export function Layout({ children }: LayoutProps) {
+export function DfLayout({ children }: DfLayoutProps) {
   const { data: user } = useCurrentUser();
   const queryClient = useQueryClient();
 
@@ -29,7 +27,6 @@ export function Layout({ children }: LayoutProps) {
       console.error('Logout failed:', error);
     } finally {
       queryClient.clear();
-      localStorage.removeItem('auth_token');
       window.location.href = '/login';
     }
   };
@@ -37,36 +34,36 @@ export function Layout({ children }: LayoutProps) {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white shadow-sm border-b border-gray-200">
+      <header className="bg-indigo-900 shadow-sm border-b border-indigo-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-xl text-white">🔐</span>
+              <div className="w-10 h-10 bg-indigo-600 rounded-lg flex items-center justify-center">
+                <span className="text-xl text-white">🏢</span>
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">
-                  Data Principal Dashboard
+                <h1 className="text-xl font-bold text-white">
+                  Data Fiduciary Console
                 </h1>
-                <p className="text-xs text-gray-500">DPDP Act 2023 Compliance</p>
+                <p className="text-xs text-indigo-300">DPDP Act 2023 Compliance</p>
               </div>
             </div>
 
             <div className="flex items-center gap-4">
-              <a href="/df/dashboard" className="text-sm text-gray-500 hover:text-gray-700 transition-colors">
-                Switch to DF View
+              <a href="/dp/dashboard" className="text-sm text-indigo-300 hover:text-white transition-colors">
+                Switch to DP View
               </a>
               {user && (
                 <>
                   <div className="text-right hidden md:block">
-                    <p className="text-sm font-medium text-gray-900">
+                    <p className="text-sm font-medium text-white">
                       {user.name}
                     </p>
-                    <p className="text-xs text-gray-500">{user.email}</p>
+                    <p className="text-xs text-indigo-300">{user.email}</p>
                   </div>
                   <button
                     onClick={handleLogout}
-                    className="btn-secondary text-sm"
+                    className="bg-indigo-700 hover:bg-indigo-600 text-white text-sm px-4 py-2 rounded-lg transition-colors"
                   >
                     Logout
                   </button>
@@ -82,14 +79,14 @@ export function Layout({ children }: LayoutProps) {
         <aside className="hidden md:block w-56 flex-shrink-0">
           <nav className="card p-2 sticky top-8">
             <ul className="space-y-1">
-              {navItems.map((item) => (
+              {dfNavItems.map((item) => (
                 <li key={item.to}>
                   <NavLink
                     to={item.to}
                     className={({ isActive }) =>
                       `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                         isActive
-                          ? 'bg-primary text-white'
+                          ? 'bg-indigo-600 text-white'
                           : 'text-gray-700 hover:bg-gray-100'
                       }`
                     }
@@ -103,30 +100,6 @@ export function Layout({ children }: LayoutProps) {
           </nav>
         </aside>
 
-        {/* Mobile Navigation */}
-        <div className="md:hidden w-full mb-4">
-          <div className="card p-2 overflow-x-auto">
-            <div className="flex gap-1">
-              {navItems.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  className={({ isActive }) =>
-                    `flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap transition-colors ${
-                      isActive
-                        ? 'bg-primary text-white'
-                        : 'text-gray-700 hover:bg-gray-100'
-                    }`
-                  }
-                >
-                  <span>{item.icon}</span>
-                  {item.label}
-                </NavLink>
-              ))}
-            </div>
-          </div>
-        </div>
-
         {/* Main Content */}
         <main className="flex-1 min-w-0">
           {children || <Outlet />}
@@ -138,11 +111,8 @@ export function Layout({ children }: LayoutProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
           <div className="text-center text-sm text-gray-600">
             <p>
-              Protected by <span className="font-semibold">DPDP Act 2023</span> |
-              Your data rights matter
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              © 2026 Government of India. All rights reserved.
+              <span className="font-semibold">Data Fiduciary Console</span> |
+              DPDP Act 2023 Compliant
             </p>
           </div>
         </div>

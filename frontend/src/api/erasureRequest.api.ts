@@ -8,7 +8,7 @@ export async function createErasureRequest(
   data: CreateErasureRequestInput
 ): Promise<ErasureRequest> {
   const response = await apiClient.post<ErasureRequestResponse>(
-    '/api/erasure-requests',
+    '/api/v1/erasure-requests',
     data
   );
   return response.data.data;
@@ -19,7 +19,7 @@ export async function createErasureRequest(
  */
 export async function getErasureRequests(): Promise<ErasureRequest[]> {
   const response = await apiClient.get<ErasureRequestListResponse>(
-    '/api/erasure-requests'
+    '/api/v1/erasure-requests'
   );
   return response.data.data;
 }
@@ -31,7 +31,7 @@ export async function getErasureRequestById(
   requestId: string
 ): Promise<ErasureRequest> {
   const response = await apiClient.get<ErasureRequestResponse>(
-    `/api/erasure-requests/${requestId}`
+    `/api/v1/erasure-requests/${requestId}`
   );
   return response.data.data;
 }

@@ -140,10 +140,10 @@ router.get('/callback', async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     });
 
-    // Redirect to frontend dashboard with token
-    // Token in URL is used for cross-domain deployments (Vercel ↔ Railway)
+    // P1-7: Redirect to frontend without token in URL
+    // The httpOnly cookie (set above) handles auth via withCredentials: true
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-    res.redirect(`${frontendUrl}/auth/callback?token=${token}`);
+    res.redirect(`${frontendUrl}/auth/callback`);
   } catch (error) {
     console.error('OAuth callback error:', error);
     res.status(500).json({

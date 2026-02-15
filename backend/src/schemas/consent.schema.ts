@@ -4,11 +4,14 @@ import { z } from "zod";
 const sanitizeString = (s: string) => s.replace(/\0/g, '');
 
 export const CreateConsentSchema = z.object({
+  // P1-2: userId is now optional — server derives from JWT token
+  // Kept for backward compatibility with service-to-service calls
   userId: z.string()
     .min(1, "userId cannot be empty")
     .max(500, "userId cannot exceed 500 characters")
     .transform(sanitizeString)
-    .refine((s) => !/\0/.test(s), { message: "userId contains invalid characters" }),
+    .refine((s) => !/\0/.test(s), { message: "userId contains invalid characters" })
+    .optional(),
   purpose: z.string()
     .min(1, "purpose cannot be empty")
     .transform(sanitizeString)
@@ -37,9 +40,11 @@ export const CreateConsentSchema = z.object({
 }).strict();
 
 export const RevokeSemanticSchema = z.object({
+  // P1-2: userId now optional — server derives from JWT token
   userId: z.string()
     .min(1, "userId cannot be empty")
-    .transform(sanitizeString),
+    .transform(sanitizeString)
+    .optional(),
   purpose: z.string()
     .min(1, "purpose cannot be empty")
     .transform(sanitizeString),

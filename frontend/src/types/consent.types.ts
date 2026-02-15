@@ -32,7 +32,7 @@ export interface ConsentListResponse {
 }
 
 export interface ConsentGrantRequest {
-  userId: string;
+  // P1-2: userId removed — server derives from JWT token
   purpose: string;
   dataTypes: string[];
   validUntil: string;

@@ -25,40 +25,27 @@ export interface AuthenticatedRequest extends Request {
 
 /**
  * JWT Authentication Middleware
- * Validates JWT token from Authorization header and attaches user to request
- * 
- * Supports two auth methods:
- * 1. Bearer token: Authorization: Bearer <jwt>
- * 2. API key (legacy): X-API-Key: <key>
+ * Validates JWT token from Authorization header or httpOnly cookie
+ * P1-7: Removed legacy API key passthrough — use requireApiKey middleware for API key auth
  */
 export const authenticateJWT = async (
   req: AuthenticatedRequest,
   res: Response,
   next: NextFunction
 ) => {
-  // Extract token from Authorization header OR httpOnly cookie
   let token: string | undefined;
 
   const authHeader = req.headers.authorization;
-  const apiKey = req.headers["x-api-key"];
-
-  // Legacy API key support (for backward compatibility)
-  if (apiKey && !authHeader) {
-    // Handled by requireApiKey middleware
-    return next();
-  }
 
   if (authHeader && authHeader.startsWith('Bearer ')) {
     token = authHeader.substring(7);
   } else if ((req as any).cookies?.auth_token) {
-    // Support httpOnly cookie for browser requests
     token = (req as any).cookies.auth_token;
   }
 
   if (!token) {
     return res.status(401).json({
       error: "Unauthorized: Missing authorization header or auth cookie",
-      message: "Provide Authorization: Bearer <token> or X-API-Key: <key>",
     });
   }
 

@@ -14,11 +14,8 @@ export const apiClient = axios.create({
 // Request interceptor
 apiClient.interceptors.request.use(
   (config) => {
-    // Check localStorage for JWT token (cross-domain auth)
-    const token = localStorage.getItem('auth_token');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    // P1-7: Cookie-only auth — no localStorage token.
+    // httpOnly cookies are sent automatically via withCredentials: true
     return config;
   },
   (error) => Promise.reject(error)
@@ -29,8 +26,7 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
-      // Session expired, clear token and redirect to login
-      localStorage.removeItem('auth_token');
+      // Session expired, redirect to login
       window.location.href = '/login?session_expired=true';
     } else if (error.response?.status === 429) {
       // Rate limit exceeded

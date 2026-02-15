@@ -1,47 +1,35 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { LoginPage } from '@pages/LoginPage';
 import { AuthCallbackPage } from '@pages/AuthCallbackPage';
-import { DashboardPage } from '@pages/DashboardPage';
-import { ConsentListPage } from '@pages/ConsentListPage';
-import { ConsentDetailPage } from '@pages/ConsentDetailPage';
-import { GrantConsentPage } from '@pages/GrantConsentPage';
-import { ErasureRequestPage } from '@pages/ErasureRequestPage';
-import { ErasureRequestListPage } from '@pages/ErasureRequestListPage';
-import { ActivityLogPage } from '@pages/ActivityLogPage';
-import { DfDashboardPage } from '@pages/DfDashboardPage';
-import { Layout } from '@components/layout/Layout';
+import { PortalSelectorPage } from '@pages/PortalSelectorPage';
 import { ProtectedRoute } from '@components/common/ProtectedRoute';
+import { dpRoutes } from './dp/routes';
+import { dfRoutes } from './df/routes';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
         {/* Public Routes */}
+        <Route path="/" element={<PortalSelectorPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
-        {/* Protected Routes */}
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <Layout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardPage />} />
-          <Route path="consents" element={<ConsentListPage />} />
-          <Route path="consents/:id" element={<ConsentDetailPage />} />
-          <Route path="grant-consent" element={<GrantConsentPage />} />
-          <Route path="erasure-request" element={<ErasureRequestPage />} />
-          <Route path="erasure-requests" element={<ErasureRequestListPage />} />
-          <Route path="activity-log" element={<ActivityLogPage />} />
-          <Route path="df-dashboard" element={<DfDashboardPage />} />
+        {/* Protected layout wrapper — all child routes require authentication */}
+        <Route element={<ProtectedRoute><Outlet /></ProtectedRoute>}>
+          {/* Data Principal Routes (/dp/*) */}
+          {dpRoutes}
+          {/* Data Fiduciary Routes (/df/*) */}
+          {dfRoutes}
         </Route>
 
+        {/* Legacy redirects */}
+        <Route path="/dashboard" element={<Navigate to="/dp/dashboard" replace />} />
+        <Route path="/consents" element={<Navigate to="/dp/consents" replace />} />
+        <Route path="/df-dashboard" element={<Navigate to="/df/dashboard" replace />} />
+
         {/* Catch-all route */}
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   );

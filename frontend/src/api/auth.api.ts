@@ -8,7 +8,7 @@ export const authApi = {
   async getCurrentUser(): Promise<UserWithRoles> {
     return apiRequest<UserWithRoles>({
       method: 'GET',
-      url: '/api/users/me',
+      url: '/api/v1/users/me',
     });
   },
 

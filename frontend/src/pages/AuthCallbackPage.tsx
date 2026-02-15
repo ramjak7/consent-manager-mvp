@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LoadingSpinner } from '@components/common/LoadingSpinner';
 import { ErrorMessage } from '@components/common/ErrorMessage';
+import { authApi } from '@api/auth.api';
 
 export function AuthCallbackPage() {
   const navigate = useNavigate();
@@ -10,8 +11,6 @@ export function AuthCallbackPage() {
 
   useEffect(() => {
     const handleCallback = async () => {
-      // Check for token in URL (cross-domain auth flow)
-      const token = searchParams.get('token');
       const errorParam = searchParams.get('error');
       const errorDescription = searchParams.get('error_description');
 
@@ -21,37 +20,20 @@ export function AuthCallbackPage() {
         return;
       }
 
-      if (token) {
-        // Token received directly from backend redirect
-        localStorage.setItem('auth_token', token);
-        navigate('/dashboard', { replace: true });
-        return;
-      }
-
-      // Fallback: Get authorization code from URL (same-domain flow)
-      const code = searchParams.get('code');
-      if (!code) {
-        setError('No authorization code or token received');
-        return;
-      }
-
+      // P1-7: Cookie-only auth — the httpOnly cookie was set by the backend
+      // during the /auth/callback redirect. No token in URL needed.
+      // Fetch user profile to determine role-based redirect.
       try {
-        // Call backend to exchange code for token
-        const apiUrl = import.meta.env.VITE_API_URL || '';
-        const response = await fetch(`${apiUrl}/auth/callback?code=${code}`, {
-          method: 'GET',
-          credentials: 'include',
-        });
-
-        if (response.ok) {
-          navigate('/dashboard', { replace: true });
+        const user = await authApi.getCurrentUser();
+        const roles = user.roles?.map((r: { roleName: string }) => r.roleName) ?? [];
+        if (roles.includes('DF_CLIENT') || roles.includes('ADMIN') || roles.includes('SUPER_ADMIN')) {
+          navigate('/df/dashboard', { replace: true });
         } else {
-          const data = await response.json();
-          setError(data.message || 'Authentication failed');
+          navigate('/dp/dashboard', { replace: true });
         }
-      } catch (err) {
-        setError('Network error during authentication');
-        console.error('Auth callback error:', err);
+      } catch {
+        // If profile fetch fails, default to DP dashboard
+        navigate('/dp/dashboard', { replace: true });
       }
     };
 

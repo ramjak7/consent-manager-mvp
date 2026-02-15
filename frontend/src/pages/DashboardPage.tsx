@@ -2,10 +2,14 @@ import { useCurrentUser } from '@hooks/useAuth';
 import { useConsents } from '@hooks/useConsents';
 import { ConsentStatusBadge } from '@components/consent/ConsentStatusBadge';
 import { Link, useNavigate } from 'react-router-dom';
+import { consentApi } from '@api/consent.api';
+import { toast } from 'sonner';
+import { useState } from 'react';
 
 export function DashboardPage() {
   const { data: user } = useCurrentUser();
   const navigate = useNavigate();
+  const [exporting, setExporting] = useState(false);
   
   // Fetch all consents to calculate counts
   const { data: consentsData } = useConsents({ limit: 100 }); // Fetch more to get accurate counts
@@ -55,13 +59,47 @@ export function DashboardPage() {
         <div className="card mb-8">
           <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
           <div className="flex flex-wrap gap-4">
-            <button onClick={() => navigate('/grant-consent')} className="btn-primary">Grant New Consent</button>
-            <Link to="/erasure-request" className="btn-danger">
+            <button onClick={() => navigate('/dp/grant-consent')} className="btn-primary">Grant New Consent</button>
+            <Link to="/dp/erasure-request" className="btn-danger">
               Request Data Erasure
             </Link>
-            <Link to="/consents" className="btn-secondary">
+            <Link to="/dp/consents" className="btn-secondary">
               View All Consents
             </Link>
+            <button
+              onClick={async () => {
+                setExporting(true);
+                try {
+                  await consentApi.exportData('json');
+                  toast.success('Data exported successfully');
+                } catch {
+                  toast.error('Export failed');
+                } finally {
+                  setExporting(false);
+                }
+              }}
+              disabled={exporting}
+              className="btn-secondary"
+            >
+              {exporting ? 'Exporting...' : '⬇ Export My Data (JSON)'}
+            </button>
+            <button
+              onClick={async () => {
+                setExporting(true);
+                try {
+                  await consentApi.exportData('csv');
+                  toast.success('CSV exported successfully');
+                } catch {
+                  toast.error('Export failed');
+                } finally {
+                  setExporting(false);
+                }
+              }}
+              disabled={exporting}
+              className="btn-secondary"
+            >
+              {exporting ? 'Exporting...' : '⬇ Export Consents (CSV)'}
+            </button>
           </div>
         </div>
 
@@ -103,7 +141,7 @@ export function DashboardPage() {
             <p className="text-gray-600 mb-4">
               View your complete activity history and audit trail.
             </p>
-            <Link to="/activity-log" className="btn-secondary">
+            <Link to="/dp/activity-log" className="btn-secondary">
               View Activity Log
             </Link>
           </div>
