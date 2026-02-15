@@ -82,7 +82,7 @@ router.get(
   "/admin/processors",
   adminLimiter,
   authenticateJWT,
-  requirePermission("ADMIN"),
+  requirePermission("PROCESSOR_READ"),
   wrap(async (req, res) => {
     const { status, page, limit } = req.query;
 
@@ -108,7 +108,7 @@ router.get(
   "/admin/processors/:id",
   adminLimiter,
   authenticateJWT,
-  requirePermission("ADMIN"),
+  requirePermission("PROCESSOR_READ"),
   validate({ params: UuidParamSchema }),
   wrap(async (req, res) => {
     const processor = await getProcessorById(req.params.id);
@@ -127,7 +127,7 @@ router.post(
   "/admin/processors",
   adminLimiter,
   authenticateJWT,
-  requirePermission("ADMIN"),
+  requirePermission("PROCESSOR_MANAGE"),
   validate({ body: CreateProcessorSchema }),
   wrap(async (req: AuthenticatedRequest, res) => {
     const processor = await createProcessor({
@@ -146,7 +146,7 @@ router.patch(
   "/admin/processors/:id",
   adminLimiter,
   authenticateJWT,
-  requirePermission("ADMIN"),
+  requirePermission("PROCESSOR_MANAGE"),
   validate({ params: UuidParamSchema, body: UpdateProcessorSchema }),
   wrap(async (req, res) => {
     const updated = await updateProcessor(req.params.id, req.body);

@@ -14,6 +14,8 @@ const dfNavItems = [
   { to: '/df/correction-requests', label: 'Corrections', icon: '✏️' },
   { to: '/df/purposes', label: 'Purposes', icon: '🎯' },
   { to: '/df/processors', label: 'Processors', icon: '🏭' },
+  { to: '/df/consents', label: 'All Consents', icon: '📋' },
+  { to: '/df/audit-trail', label: 'Audit Trail', icon: '📜' },
 ];
 
 export function DfLayout({ children }: DfLayoutProps) {
@@ -27,7 +29,7 @@ export function DfLayout({ children }: DfLayoutProps) {
       console.error('Logout failed:', error);
     } finally {
       queryClient.clear();
-      window.location.href = '/login';
+      window.location.href = '/';
     }
   };
 

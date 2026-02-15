@@ -30,7 +30,7 @@ export function Layout({ children }: LayoutProps) {
     } finally {
       queryClient.clear();
       localStorage.removeItem('auth_token');
-      window.location.href = '/login';
+      window.location.href = '/';
     }
   };
 

@@ -74,7 +74,7 @@ router.get(
 router.get(
   "/purposes/:code/versions",
   authenticateJWT,
-  requirePermission("ADMIN"),
+  requirePermission("PURPOSE_READ"),
   wrap(async (req, res) => {
     const versions = await getPurposeVersions(req.params.code);
     if (versions.length === 0) {
@@ -92,7 +92,7 @@ router.get(
   "/admin/purposes",
   adminLimiter,
   authenticateJWT,
-  requirePermission("ADMIN"),
+  requirePermission("PURPOSE_READ"),
   wrap(async (req, res) => {
     const page = req.query.page ? parseInt(req.query.page as string, 10) : undefined;
     const limit = req.query.limit
@@ -117,7 +117,7 @@ router.post(
   "/admin/purposes",
   adminLimiter,
   authenticateJWT,
-  requirePermission("ADMIN"),
+  requirePermission("PURPOSE_MANAGE"),
   validate({ body: CreatePurposeSchema }),
   wrap(async (req: AuthenticatedRequest, res) => {
     const purpose = await createPurpose({
@@ -137,7 +137,7 @@ router.post(
   "/admin/purposes/:code/versions",
   adminLimiter,
   authenticateJWT,
-  requirePermission("ADMIN"),
+  requirePermission("PURPOSE_MANAGE"),
   validate({ body: UpdatePurposeVersionSchema }),
   wrap(async (req: AuthenticatedRequest, res) => {
     try {

@@ -142,7 +142,7 @@ router.get(
   "/admin/correction-requests",
   adminLimiter,
   authenticateJWT,
-  requirePermission("ADMIN"),
+  requirePermission("CORRECTION_MANAGE"),
   validate({ query: GetCorrectionRequestsQuerySchema }),
   wrap(async (req: any, res) => {
     const { status, page, limit } = req.query;
@@ -169,7 +169,7 @@ router.patch(
   "/admin/correction-requests/:id/status",
   adminLimiter,
   authenticateJWT,
-  requirePermission("ADMIN"),
+  requirePermission("CORRECTION_MANAGE"),
   validate({
     params: CorrectionRequestUuidParamSchema,
     body: UpdateCorrectionRequestStatusSchema,

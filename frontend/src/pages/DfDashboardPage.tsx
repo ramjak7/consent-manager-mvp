@@ -208,7 +208,7 @@ export function DfDashboardPage() {
       <div className="card">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-semibold">Recent Consents</h2>
-          <Link to="/consents" className="text-sm text-primary hover:underline">
+          <Link to="/df/consents" className="text-sm text-primary hover:underline">
             View all →
           </Link>
         </div>
@@ -231,7 +231,7 @@ export function DfDashboardPage() {
                   </td>
                   <td className="px-4 py-2 text-gray-500">{formatDate(c.createdAt)}</td>
                   <td className="px-4 py-2 text-right">
-                    <Link to={`/consents/${c.consentId}`} className="text-primary hover:underline">
+                    <Link to={`/dp/consents/${c.consentId}`} className="text-primary hover:underline">
                       View
                     </Link>
                   </td>
@@ -247,7 +247,7 @@ export function DfDashboardPage() {
         <p className="text-sm text-gray-600">
           📜 All consent operations are audited per <strong>DPDP Act 2023 §6</strong> requirements.
         </p>
-        <Link to="/activity-log" className="text-sm text-primary hover:underline mt-2 inline-block">
+        <Link to="/df/audit-trail" className="text-sm text-primary hover:underline mt-2 inline-block">
           View Audit Trail →
         </Link>
       </div>

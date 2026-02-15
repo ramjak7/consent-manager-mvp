@@ -134,7 +134,7 @@ router.get(
   "/admin/erasure-requests",
   adminLimiter,
   authenticateJWT,
-  requirePermission("ADMIN"),
+  requirePermission("ERASURE_MANAGE"),
   validate({ query: GetErasureRequestsQuerySchema }),
   wrap(async (req: any, res) => {
     const { status, page, limit } = req.query;
@@ -161,7 +161,7 @@ router.patch(
   "/admin/erasure-requests/:id/status",
   adminLimiter,
   authenticateJWT,
-  requirePermission("ADMIN"),
+  requirePermission("ERASURE_MANAGE"),
   validate({
     params: ErasureRequestUuidParamSchema,
     body: UpdateErasureRequestStatusSchema,
