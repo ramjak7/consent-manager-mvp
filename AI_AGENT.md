@@ -237,6 +237,67 @@ Governance clarity is prioritized over automation convenience.
 
 ---
 
+---
+
+## 12. Deployment Context
+
+This section records live deployment details for operational and agent reference.
+
+### 12.1 Frontend (Vercel)
+
+| Item | Value |
+|------|-------|
+| **URL** | https://consent-manager-mvp.vercel.app |
+| **Platform** | Vercel |
+| **Auto-deploy** | On push to `main` branch |
+| **Framework** | React 19 + Vite |
+
+**Key Routes:**
+- `/` — Portal selector (DP vs DF)
+- `/login` — Shared OAuth2 login
+- `/dp/dashboard` — Data Principal portal
+- `/df/dashboard` — Data Fiduciary portal (role-guarded)
+
+### 12.2 Backend (Railway)
+
+| Item | Value |
+|------|-------|
+| **URL** | https://consent-manager-mvp-production.up.railway.app |
+| **Platform** | Railway |
+| **Auto-deploy** | On push to `main` branch |
+| **Framework** | Express.js 5 + TypeScript |
+| **API Prefix** | `/api/v1/` |
+
+### 12.3 Database (Railway PostgreSQL)
+
+| Item | Value |
+|------|-------|
+| **DATABASE_URL (internal)** | `postgresql://postgres:ggGSOjStTZnmthzpDVXxbauAAXnsxDzg@postgres.railway.internal:5432/railway` |
+| **DATABASE_PUBLIC_URL (external)** | `postgresql://postgres:ggGSOjStTZnmthzpDVXxbauAAXnsxDzg@switchyard.proxy.rlwy.net:41939/railway` |
+| **Migrations applied** | 001–013 |
+| **Migration runner** | `node db/migrate.js` (uses DATABASE_URL env var) |
+
+> **Internal URL** — used by the backend service running on Railway. Set as env var in Railway dashboard.
+> **Public URL** — used for running migrations from local machine or CI.
+
+### 12.4 Environment Variables (Railway Backend Service)
+
+Required env vars in Railway dashboard → backend service → Variables:
+- `DATABASE_URL` — Internal PostgreSQL connection string
+- `JWT_SECRET` — 256-bit secret for JWT signing
+- `ENCRYPTION_KEY` — 32-byte base64 key for column-level encryption
+- `NODE_ENV` — `production`
+- `OAUTH2_ISSUER` — OAuth2 provider URL (or `mock` for dev)
+- `OAUTH2_CLIENT_ID`, `OAUTH2_CLIENT_SECRET`, `OAUTH2_REDIRECT_URI`
+- `FRONTEND_URL` — `https://consent-manager-mvp.vercel.app`
+
+### 12.5 Environment Variables (Vercel Frontend)
+
+Required env vars in Vercel dashboard → Settings → Environment Variables:
+- `VITE_API_URL` — `https://consent-manager-mvp-production.up.railway.app`
+
+---
+
 ## Binding Statement
 
 Any AI agent interacting with this repository implicitly agrees to follow this file.

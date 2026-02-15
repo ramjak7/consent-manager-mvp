@@ -26,8 +26,14 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
     if (error.response?.status === 401) {
-      // Session expired, redirect to login
-      window.location.href = '/login?session_expired=true';
+      // Don't redirect for /users/me — it's expected to 401 for unauthenticated users
+      // (PortalSelectorPage calls this to check if already logged in)
+      const url = error.config?.url || '';
+      const isAuthCheck = url.includes('/users/me') || url.includes('/auth/');
+      const isPublicPage = ['/', '/login'].includes(window.location.pathname);
+      if (!isAuthCheck && !isPublicPage) {
+        window.location.href = '/login?session_expired=true';
+      }
     } else if (error.response?.status === 429) {
       // Rate limit exceeded
       console.error('Too many requests. Please try again later.');

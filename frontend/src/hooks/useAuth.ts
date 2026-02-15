@@ -6,6 +6,6 @@ export function useCurrentUser() {
     queryKey: ['currentUser'],
     queryFn: () => authApi.getCurrentUser(),
     staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: 1,
+    retry: false, // Don't retry — 401 for unauthenticated users is expected
   });
 }
