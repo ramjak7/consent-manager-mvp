@@ -54,7 +54,7 @@ export function LoginPage() {
           <img
             src="/concurin_logo.png"
             alt="Concurin"
-            className="h-12 mx-auto mb-4"
+            className="h-32 mx-auto mb-4"
             onError={(e) => {
               // Fallback if logo not yet added
               (e.target as HTMLImageElement).style.display = 'none';

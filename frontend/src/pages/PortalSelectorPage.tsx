@@ -34,7 +34,7 @@ export function PortalSelectorPage() {
           <img
             src="/concurin_logo.png"
             alt="Concurin"
-            className="h-14 mx-auto mb-4"
+            className="h-32 mx-auto mb-4"
             onError={(e) => {
               (e.target as HTMLImageElement).style.display = 'none';
             }}
