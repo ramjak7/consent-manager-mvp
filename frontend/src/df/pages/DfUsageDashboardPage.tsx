@@ -4,22 +4,19 @@ import { LoadingSpinner } from '@components/common/LoadingSpinner';
 import { ErrorMessage } from '@components/common/ErrorMessage';
 
 interface UsageStats {
-  totalRequests: number;
-  consentsCollected: number;
-  consentsRevoked: number;
-  processingValidations: number;
-  erasureRequests: number;
-  correctionRequests: number;
-  avgResponseTime: number;
-  errorRate: number;
+  totalApiCalls: number;
+  totalConsentsCollected: number;
+  totalConsentsRevoked: number;
+  totalErasureRequests: number;
+  avgResponseTimeMs: number;
 }
 
 interface DailySummary {
-  date: string;
+  day: string;
   eventType: string;
-  requestCount: number;
-  avgResponseTime: number;
-  errorCount: number;
+  eventCount: number;
+  avgResponseMs: number;
+  maxResponseMs: number;
 }
 
 interface RecentEvent {
@@ -33,12 +30,10 @@ interface RecentEvent {
 }
 
 const STAT_CARDS = [
-  { key: 'totalRequests', label: 'Total Requests', icon: '📡', color: 'bg-blue-50 text-blue-700' },
-  { key: 'consentsCollected', label: 'Consents Collected', icon: '✅', color: 'bg-green-50 text-green-700' },
-  { key: 'consentsRevoked', label: 'Consents Revoked', icon: '❌', color: 'bg-red-50 text-red-700' },
-  { key: 'processingValidations', label: 'Validations', icon: '🔍', color: 'bg-purple-50 text-purple-700' },
-  { key: 'erasureRequests', label: 'Erasure Requests', icon: '🗑️', color: 'bg-orange-50 text-orange-700' },
-  { key: 'correctionRequests', label: 'Corrections', icon: '✏️', color: 'bg-cyan-50 text-cyan-700' },
+  { key: 'totalApiCalls', label: 'Total API Calls', icon: '📡', color: 'bg-blue-50 text-blue-700' },
+  { key: 'totalConsentsCollected', label: 'Consents Collected', icon: '✅', color: 'bg-green-50 text-green-700' },
+  { key: 'totalConsentsRevoked', label: 'Consents Revoked', icon: '❌', color: 'bg-red-50 text-red-700' },
+  { key: 'totalErasureRequests', label: 'Erasure Requests', icon: '🗑️', color: 'bg-orange-50 text-orange-700' },
 ] as const;
 
 export function DfUsageDashboardPage() {
@@ -114,14 +109,14 @@ export function DfUsageDashboardPage() {
 
       {/* Stats Cards */}
       {stats && (
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {STAT_CARDS.map(({ key, label, icon, color }) => (
             <div key={key} className="card p-4">
               <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium mb-2 ${color}`}>
                 {icon} {label}
               </div>
               <div className="text-2xl font-bold text-gray-900">
-                {formatNumber(stats[key as keyof UsageStats] as number)}
+                {formatNumber((stats[key as keyof UsageStats] as number) ?? 0)}
               </div>
             </div>
           ))}
@@ -134,14 +129,14 @@ export function DfUsageDashboardPage() {
           <div className="card p-6">
             <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Avg Response Time</h3>
             <div className="text-3xl font-bold text-gray-900">
-              {stats.avgResponseTime ? `${Math.round(stats.avgResponseTime)}ms` : 'N/A'}
+              {stats.avgResponseTimeMs ? `${Math.round(stats.avgResponseTimeMs)}ms` : 'N/A'}
             </div>
             <div className="mt-2">
               <div className="w-full bg-gray-200 rounded-full h-2">
                 <div className="h-2 rounded-full transition-all"
                   style={{
-                    width: `${Math.min((stats.avgResponseTime / 1000) * 100, 100)}%`,
-                    backgroundColor: stats.avgResponseTime < 200 ? '#10B981' : stats.avgResponseTime < 500 ? '#F59E0B' : '#EF4444',
+                    width: `${Math.min(((stats.avgResponseTimeMs || 0) / 1000) * 100, 100)}%`,
+                    backgroundColor: (stats.avgResponseTimeMs || 0) < 200 ? '#10B981' : (stats.avgResponseTimeMs || 0) < 500 ? '#F59E0B' : '#EF4444',
                   }} />
               </div>
               <div className="flex justify-between text-xs text-gray-400 mt-1">
@@ -150,16 +145,12 @@ export function DfUsageDashboardPage() {
             </div>
           </div>
           <div className="card p-6">
-            <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Error Rate</h3>
-            <div className="text-3xl font-bold" style={{
-              color: stats.errorRate < 1 ? '#10B981' : stats.errorRate < 5 ? '#F59E0B' : '#EF4444'
-            }}>
-              {stats.errorRate ? `${stats.errorRate.toFixed(2)}%` : '0%'}
+            <h3 className="text-sm font-semibold text-gray-500 uppercase mb-2">Total Events</h3>
+            <div className="text-3xl font-bold text-blue-600">
+              {formatNumber(stats.totalApiCalls)}
             </div>
             <p className="text-xs text-gray-500 mt-2">
-              {stats.errorRate < 1 ? 'Excellent — well within SLA' :
-               stats.errorRate < 5 ? 'Acceptable — monitor closely' :
-               'High — investigate errors'}
+              API calls tracked in the selected period
             </p>
           </div>
         </div>
@@ -178,22 +169,20 @@ export function DfUsageDashboardPage() {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Event Type</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Requests</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Avg Response</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Errors</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Max Response</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {dailySummary.slice(0, 20).map((row, i) => (
                 <tr key={i} className="hover:bg-gray-50">
-                  <td className="px-6 py-3 text-sm text-gray-900">{new Date(row.date).toLocaleDateString()}</td>
+                  <td className="px-6 py-3 text-sm text-gray-900">{new Date(row.day).toLocaleDateString()}</td>
                   <td className="px-6 py-3 text-sm">
                     <code className="bg-gray-100 px-2 py-0.5 rounded text-xs">{row.eventType}</code>
                   </td>
-                  <td className="px-6 py-3 text-sm text-gray-900 font-medium">{row.requestCount}</td>
-                  <td className="px-6 py-3 text-sm text-gray-500">{Math.round(row.avgResponseTime)}ms</td>
-                  <td className="px-6 py-3 text-sm">
-                    <span className={row.errorCount > 0 ? 'text-red-600 font-medium' : 'text-gray-400'}>
-                      {row.errorCount}
-                    </span>
+                  <td className="px-6 py-3 text-sm text-gray-900 font-medium">{row.eventCount}</td>
+                  <td className="px-6 py-3 text-sm text-gray-500">{Math.round(row.avgResponseMs)}ms</td>
+                  <td className="px-6 py-3 text-sm text-gray-500">
+                    {Math.round(row.maxResponseMs)}ms
                   </td>
                 </tr>
               ))}
