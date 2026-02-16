@@ -8,14 +8,22 @@ import { ErasureRequestPage } from '@pages/ErasureRequestPage';
 import { ErasureRequestListPage } from '@pages/ErasureRequestListPage';
 import { CorrectionRequestPage } from '@pages/CorrectionRequestPage';
 import { ActivityLogPage } from '@pages/ActivityLogPage';
+import { RoleGuard } from '@components/common/RoleGuard';
 
 /**
  * Data Principal route tree.
  * All routes are prefixed with /dp/* via the parent mount in App.tsx.
- * Uses the existing Layout (DP sidebar nav).
+ * Protected by RoleGuard — only DP_USER, ADMIN, and SUPER_ADMIN roles allowed.
  */
 export const dpRoutes = (
-  <Route path="dp" element={<Layout />}>
+  <Route
+    path="dp"
+    element={
+      <RoleGuard allowedRoles={['DP_USER', 'ADMIN', 'SUPER_ADMIN']} fallback="/df/dashboard">
+        <Layout />
+      </RoleGuard>
+    }
+  >
     <Route index element={<DashboardPage />} />
     <Route path="dashboard" element={<DashboardPage />} />
     <Route path="consents" element={<ConsentListPage />} />
