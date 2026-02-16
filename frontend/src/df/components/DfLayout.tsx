@@ -10,12 +10,18 @@ interface DfLayoutProps {
 
 const dfNavItems = [
   { to: '/df/dashboard', label: 'Analytics', icon: '📈' },
-  { to: '/df/erasure-requests', label: 'Erasure Requests', icon: '🗑️' },
-  { to: '/df/correction-requests', label: 'Corrections', icon: '✏️' },
+  { to: '/df/consents', label: 'All Consents', icon: '📋' },
+  { to: '/df/notices', label: 'Notices', icon: '📄' },
   { to: '/df/purposes', label: 'Purposes', icon: '🎯' },
   { to: '/df/processors', label: 'Processors', icon: '🏭' },
-  { to: '/df/consents', label: 'All Consents', icon: '📋' },
+  { to: '/df/erasure-requests', label: 'Erasure Requests', icon: '🗑️' },
+  { to: '/df/correction-requests', label: 'Corrections', icon: '✏️' },
   { to: '/df/audit-trail', label: 'Audit Trail', icon: '📜' },
+  { to: '/df/usage', label: 'Usage & Billing', icon: '📊' },
+  { to: '/df/api-keys', label: 'API Keys', icon: '🔑' },
+  { to: '/df/organization', label: 'Organization', icon: '🏢' },
+  { to: '/df/branding', label: 'Branding', icon: '🎨' },
+  { to: '/df/sso', label: 'SSO / SAML', icon: '🔐' },
 ];
 
 export function DfLayout({ children }: DfLayoutProps) {

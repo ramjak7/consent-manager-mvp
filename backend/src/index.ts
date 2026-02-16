@@ -15,6 +15,15 @@ import processorRoutes from "./routes/processorRoutes";
 import webhookRoutes from "./routes/webhookRoutes";
 import userRoutes from "./routes/userRoutes";
 import authRoutes from "./routes/authRoutes";
+import organizationRoutes from "./routes/organizationRoutes";
+import apiKeyRoutes from "./routes/apiKeyRoutes";
+import noticeRoutes from "./routes/noticeRoutes";
+import brandingRoutes from "./routes/brandingRoutes";
+import samlRoutes from "./routes/samlRoutes";
+import usageRoutes from "./routes/usageRoutes";
+import { authenticateApiKey } from "./middleware/apiKeyAuth";
+import { extractOrgContext } from "./middleware/orgContext";
+import { trackUsage } from "./middleware/usageTracking";
 import { processWebhookDeliveries } from "./services/webhookService";
 import { logger, requestLogger } from "./utils/logger";
 import { metricsMiddleware, register as metricsRegister, updateActiveConsentsGauge } from "./middleware/metrics";
@@ -72,6 +81,13 @@ app.use((req: any, res: any, next: any) => {
 // Apply general rate limiting to all routes
 app.use(generalLimiter);
 
+// API Key authentication + Org context extraction (runs before all routes)
+app.use(authenticateApiKey);
+app.use(extractOrgContext);
+
+// Usage tracking middleware (analytics & billing metering)
+app.use(trackUsage);
+
 // API v1 — all business endpoints under /api/v1
 app.use('/api/v1', consentRoutes);
 app.use('/api/v1', auditRoutes);
@@ -81,6 +97,12 @@ app.use('/api/v1', purposeRoutes);
 app.use('/api/v1', processorRoutes);
 app.use('/api/v1/webhooks', webhookRoutes);
 app.use('/api/v1', userRoutes);
+app.use('/api/v1', organizationRoutes);
+app.use('/api/v1', apiKeyRoutes);
+app.use('/api/v1', noticeRoutes);
+app.use('/api/v1', brandingRoutes);
+app.use('/api/v1', samlRoutes);
+app.use('/api/v1', usageRoutes);
 
 // Auth routes — unversioned (OAuth2 redirect URLs shouldn't change)
 app.use('/auth', authRoutes);

@@ -1,0 +1,29 @@
+{
+  "name": "@concurin/consent-sdk",
+  "version": "1.0.0",
+  "description": "Consent Collection SDK for DPDP Act 2023 compliance — embed consent collection in your applications",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "consent",
+    "dpdp",
+    "privacy",
+    "data-protection",
+    "india",
+    "compliance"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}
